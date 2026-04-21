@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "Counter": {
+      "title": "Global Stats Counter",
+      "description": "Stores global aggregate statistics for the campaign.",
+      "type": "object",
+      "properties": {
+        "appealCount": {
+          "type": "number",
+          "description": "The total number of appeals sent globally."
+        },
+        "lastUpdate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the last recorded appeal."
+        }
+      },
+      "required": ["appealCount"]
+    },
+    "Submission": {
+      "title": "Email Submission log",
+      "description": "A log entry for every email attempt (anonymized).",
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "language": {
+          "type": "string",
+          "enum": ["en", "mr"]
+        }
+      }
+    }
+  },
+  "firestore": {
+    "stats/global": {
+      "schema": "Counter",
+      "description": "Single document containing global campaign stats."
+    },
+    "submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Timestamped log of each action taken."
+    }
+  }
+}

@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Security Rules for Global Stats
+    match /stats/global {
+      allow read: if true; // Everyone can see the count
+      
+      allow update: if (
+        // Only allow incrementing by 1
+        incoming().appealCount == existing().appealCount + 1 &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['appealCount', 'lastUpdate']) &&
+        incoming().lastUpdate == request.time
+      );
+      
+      // Seed the document manually if needed, or allow first creation if admin (though we'll assume it exists)
+      allow create: if (
+        incoming().appealCount >= 0 &&
+        incoming().keys().hasAll(['appealCount', 'lastUpdate']) &&
+        incoming().keys().size() == 2
+      );
+    }
+
+    // Security Rules for Submissions (Logs)
+    match /submissions/{submissionId} {
+      function isValidSubmission(data) {
+        return data.keys().hasAll(['timestamp', 'language']) &&
+               data.keys().size() == 2 &&
+               data.timestamp == request.time &&
+               data.language in ['en', 'mr'];
+      }
+
+      allow create: if isValidSubmission(incoming());
+      allow read: if false; // Logs stay private
+    }
+  }
+}
