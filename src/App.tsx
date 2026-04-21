@@ -139,6 +139,16 @@ export default function App() {
         label: 'Appeals Sent So Far',
         unit: 'Citizens'
       },
+      gallery: {
+        title: 'Government Records',
+        subtitle: 'Official proof of the legal violations across the 3 contested blocks.',
+        view: 'View Legal Document',
+        blocks: [
+          { name: 'Perli Bauxite Block', proponent: 'Shree Malhar Minerals', status: 'LoI Expired (2023)', url:'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F557966%2F2025&proposal=350503578' },
+          { name: 'Ghungur Block-I', proponent: 'Shree Bhairavnath Earth Movers', status: 'LoI Expired (2025)', url:'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F544562%2F2025&proposal=131987801' },
+          { name: 'Ghungur Block-II', proponent: 'Shri Jugai Minerals', status: 'LoI Expired (2024)', url:'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F545254%2F2025&proposal=132332846' }
+        ]
+      },
       footer: {
         about: 'A community-led campaign for the preservation of the Shahuwadi eco-sensitive zone and the protection of the Sahyadri Tiger Corridor from illegal mining encroachment.',
         top: 'Back to top'
@@ -234,6 +244,16 @@ export default function App() {
         title: 'मोहिमेचा प्रभाव',
         label: 'आतापर्यंत पाठवलेली अपील्स',
         unit: 'नागरिक'
+      },
+      gallery: {
+        title: 'शासकीय दस्ताऐवज',
+        subtitle: '३ वादग्रस्त ब्लॉकमधील कायदेशीर उल्लंघनांचा अधिकृत पुरावा.',
+        view: 'कागदपत्र पहा',
+        blocks: [
+          { name: 'परळी बॉक्साईड ब्लॉक', proponent: 'श्री मल्हार मिनरल्स', status: 'LoI मुदतबाह्य (२०२३)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F557966%2F2025&proposal=350503578' },
+          { name: 'घुंगुर ब्लॉक-१', proponent: 'श्री भैरवनाथ अर्थ मूव्हर्स', status: 'LoI मुदतबाह्य (२०२५)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F544562%2F2025&proposal=131987801' },
+          { name: 'घुंगुर ब्लॉक-२', proponent: 'श्री जुगाई मिनरल्स', status: 'LoI मुदतबाह्य (२०२४)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F545254%2F2025&proposal=132332846' }
+        ]
       },
       fallback: {
         title: 'मॅन्युअल कॉपी (ईमेल उघडत नसल्यास)',
@@ -571,15 +591,22 @@ ${name || '[तुमचे नाव]'}
       
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#0a1f11]/95 border-b border-white/5 py-4 px-6 sm:px-8 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto flex justify-center items-center">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <div className="p-1 bg-[#c08b5c] rounded">
-              <TreePine className="text-[#0a1f11] w-5 h-5" />
+            <div className="p-1.5 bg-[#c08b5c] rounded">
+              <TreePine className="text-[#0a1f11] w-5 h-5 sm:w-4 sm:h-4" />
             </div>
-            <span className="font-serif font-bold text-white tracking-wide text-lg sm:text-xl">
+            <span className="font-serif font-black text-white tracking-tight text-lg sm:text-xl">
               Sahyadri Bachav
             </span>
           </div>
+
+          <button 
+            onClick={() => setSelectedLanguage(selectedLanguage === 'en' ? 'mr' : 'en')}
+            className="px-4 py-2 border border-white/20 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#c08b5c] hover:bg-white/10 transition-all flex items-center gap-2 bg-white/5"
+          >
+            {selectedLanguage === 'en' ? 'मराठी' : 'English'}
+          </button>
         </div>
       </nav>
 
@@ -740,6 +767,74 @@ ${name || '[तुमचे नाव]'}
                 )}
               </AnimatePresence>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* Document Gallery Section */}
+      <section className="py-24 px-6 bg-white overflow-hidden scroll-mt-20">
+        <div className="max-w-7xl mx-auto shadow-[0_40px_100px_rgba(0,0,0,0.03)] border border-gray-100 rounded-[3rem] p-8 sm:p-20 relative bg-white">
+          <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
+            <Landmark className="w-64 h-64 text-[#0a1f11]" />
+          </div>
+          
+          <div className="relative z-10 grid lg:grid-cols-12 gap-16 items-start">
+            <div className="lg:col-span-5 space-y-8">
+              <div className="space-y-4">
+                <span className="font-black text-[10px] uppercase tracking-[0.4em] text-[#c08b5c] block">{l?.gallery?.title}</span>
+                <h2 className="text-4xl sm:text-6xl font-serif font-black text-[#0a1f11] leading-tight">{l?.gallery?.title}</h2>
+              </div>
+              <p className="text-lg text-gray-500 leading-relaxed font-light">
+                {l?.gallery?.subtitle}
+              </p>
+              
+              <div className="hidden lg:block pt-8 border-t border-gray-100">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full bg-[#c08b5c]/10 flex items-center justify-center flex-shrink-0">
+                    <ShieldCheck className="w-5 h-5 text-[#c08b5c]" />
+                  </div>
+                  <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                    All documents sourced from the Directorate of Geology and Mining, Government of Maharashtra.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-7 grid gap-6">
+              {l?.gallery?.blocks?.map((block: any, idx: number) => (
+                <motion.div 
+                  key={idx}
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="group bg-[#f9f7f2] hover:bg-white border border-transparent hover:border-[#c08b5c]/30 p-6 sm:p-8 rounded-[2rem] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+                >
+                  <div className="flex items-start gap-5">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-100 group-hover:bg-[#c08b5c] transition-all">
+                      <Copy className="w-5 h-5 text-[#c08b5c] group-hover:text-white transition-colors" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-xl font-serif font-black text-[#0a1f11]">{block.name}</h4>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-[#c08b5c] transition-colors">{block.proponent}</p>
+                      <div className="flex items-center gap-2 pt-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-red-500">{block.status}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <a 
+                    href={block.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 px-6 py-4 bg-white border border-gray-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#0a1f11] hover:bg-[#0a1f11] hover:text-white transition-all shadow-sm"
+                  >
+                    {l?.gallery?.view} <ExternalLink className="w-3 h-3" />
+                  </a>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
