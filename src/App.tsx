@@ -48,6 +48,8 @@ export default function App() {
   const [userName, setUserName] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [expandedEvidence, setExpandedEvidence] = useState<Record<number, boolean>>({});
+  const [expandedBio, setExpandedBio] = useState<Record<string, boolean>>({});
 
   const [sendCount, setSendCount] = useState(0); 
   const [hasSent, setHasSent] = useState(false);
@@ -104,11 +106,15 @@ export default function App() {
         badge: 'Critical Habitat',
         envImpact: 'Environmental Impact',
         title: 'The Pride of Sahyadri',
-        body: 'The Shahuwadi region serves as a vital corridor for the Sahyadri Tiger Reserve. Open-cast bauxite mining doesn\'t just clear trees; it destroys the habitat of the magnificent Bengal Tiger and the Great Indian Hornbill.',
+        body: 'The Shahuwadi region serves as a vital corridor for the Sahyadri Tiger Reserve. Open-cast bauxite mining doesn\'t just clear trees; it destroys the habitat of the magnificent Tiger and the Great Indian Hornbill.',
         risk: 'Species at Risk',
-        riskSpecies: 'Bengal Tiger, Leopard, Wild Boar',
+        riskSpecies: 'Tiger, Leopard, Wild Boar',
+        riskDetails: 'The Western Ghats of Shahuwadi are a vital habitat for the elusive Tiger and Indian Leopard. Mining activities directly fragment their hunting grounds and migration routes, leading to dangerous man-animal conflicts and genetic isolation of these majestic species.',
         avian: 'Avian Life',
-        avianSpecies: 'Great Indian Hornbill, Forest Owlet'
+        avianSpecies: 'Great Indian Hornbill, Forest Owlet',
+        avianDetails: 'The Shahuwadi region provides old-growth tall trees essential for the nesting of the Great Indian Hornbill. Industrial mining leads to massive canopy loss, destroying nesting sites and silencing the prehistoric call of these forest giants permanently.',
+        showMore: 'Learn More',
+        showLess: 'Show Less'
       },
       crisis: {
         investigation: 'The Investigation',
@@ -128,6 +134,11 @@ export default function App() {
         cta: 'Send Automatic Email',
         copyNote: 'Note: Content syncs with active tab.'
       },
+      impact: {
+        title: 'Campaign Momentum',
+        label: 'Appeals Sent So Far',
+        unit: 'Citizens'
+      },
       footer: {
         about: 'A community-led campaign for the preservation of the Shahuwadi eco-sensitive zone and the protection of the Sahyadri Tiger Corridor from illegal mining encroachment.',
         top: 'Back to top'
@@ -143,11 +154,6 @@ export default function App() {
         successTitle: 'Thank You!',
         successBody: 'Your appeal has been recorded and your email app should be opening. If it doesn\'t, please use the manual copy buttons below.',
         close: 'Done'
-      },
-      impact: {
-        title: 'Campaign Momentum',
-        label: 'Appeals Sent So Far',
-        unit: 'Citizens'
       },
       fallback: {
         title: 'Manual Copy (If email doesn\'t open)',
@@ -172,7 +178,7 @@ export default function App() {
         ctaEvidence: 'पुरावा आणि संदर्भा'
       },
       stats: {
-        violation: { label: 'नियमांचे उल्लंघन', title: 'कालबाह्य परवाने', body: 'पार्ली, घुंगुर-१ आणि घुंगुर-२ या तिन्ही प्रकल्पांचे लेटर ऑफ इंटेंट (LoI) कालबाह्य झाले आहेत. तरीही कार्यवाही सुरू ठेवणे हे कायद्याचे उल्लंघन आहे.' },
+        violation: { label: 'नियमांचे उल्लंघन', title: 'कालबाह्य परवाने', body: 'परळी, घुंगुर-१ आणि घुंगुर-२ या तिन्ही प्रकल्पांचे लेटर ऑफ इंटेंट (LoI) कालबाह्य झाले आहेत. तरीही कार्यवाही सुरू ठेवणे हे कायद्याचे उल्लंघन आहे.' },
         migration: { label: 'स्थलांतर मार्ग', title: 'व्याघ्र मार्ग', body: 'शाहूवाडीचा हा कॉरिडॉर सह्याद्री व्याघ्र प्रकल्पाचा मुख्य दुवा आहे. खाणकामामुळे या महत्त्वपूर्ण पर्यावरणीय धमनीचा संपर्क कायमचा तुटेल.' },
         protection: { label: 'कायदेशीर स्थिती', title: 'ESA संरक्षण', body: 'पश्चिम घाट पर्यावरण संवेदनशील क्षेत्र (ESA) चा भाग म्हणून, हे ब्लॉक कायदेशीररीत्या संवर्धनासाठी नियुक्त केलेले आहेत.' }
       },
@@ -183,15 +189,19 @@ export default function App() {
         body: 'शाहूवाडी प्रदेश सह्याद्री व्याघ्र प्रकल्पासाठी एक महत्त्वाचा कॉरिडोर म्हणून काम करतो. बॉक्साईट उत्खननामुळे केवळ झाडे तोडली जात नाहीत; तर वाघ आणि धनेश पक्षांचा अधिवासही नष्ट होतो.',
         risk: 'धोक्यात असलेल्या प्रजाती',
         riskSpecies: 'वाघ, बिबट्या, रानडुक्कर',
+        riskDetails: 'शाहूवाडीचा पश्चिम घाट हा वाघ आणि बिबट्यांचे महत्त्वाचे निवासस्थान आहे. उत्खननामधून उद्भवणाऱ्या गोंधळामुळे आणि जंगलतोडीमुळे त्यांच्या शिकारीच्या क्षेत्राचा नाश होतो, ज्यामुळे मानवी वस्तीत वाघांचा वावर वाढण्याचा धोका निर्माण होतो.',
         avian: 'पक्षी जीवन',
-        avianSpecies: 'धनेश (Hornbill), रान पिंगळा'
+        avianSpecies: 'धनेश (Hornbill), रान पिंगळा',
+        avianDetails: 'धनेश (Hornbill) पक्ष्यांना घरट्यांसाठी अतिशय उंच आणि जुन्या झाडांची आवश्यकता असते. बॉक्साईट खाणकामामुळे मोठ्या प्रमाणावर होणारी वृक्षतोड या पक्ष्यांचा अधिवास कायमचा नष्ट करेल.',
+        showMore: 'अधिक माहिती',
+        showLess: 'कमी माहिती'
       },
       crisis: {
         investigation: 'तपास',
         title: '३ खाण प्रकल्पांचा धोका',
-        body: 'शाहूवाडीच्या पार्ली, घुंगुर-१ आणि घुंगुर-२ या तिन्ही ब्लॉकमधील प्रस्तावित खाणकाम सह्याद्रीच्या पर्यावरणासाठी घातक आहे. कायदेशीर आदेश संपल्यानंतरही येथे कार्यवाही सुरू आहे.',
+        body: 'शाहूवाडीच्या परळी, घुंगुर-१ आणि घुंगुर-२ या तिन्ही ब्लॉकमधील प्रस्तावित खाणकाम सह्याद्रीच्या पर्यावरणासाठी घातक आहे. कायदेशीर आदेश संपल्यानंतरही येथे कार्यवाही सुरू आहे.',
         violationDetails: 'कायदेशीर उल्लंघनाचा तपशील',
-        violationBody: 'लेटर ऑफ इंटेंट (LoI) संपल्यानंतर, उत्खननासाठी कोणतीही पुढील कार्यवाही अवैध आहे. पार्ली (२०२३), घुंगुर-१ (२०२५) आणि घुंगुर-२ (२०२४) असे तिन्ही प्रकल्प बेकायदेशीर आहेत.',
+        violationBody: 'लेटर ऑफ इंटेंट (LoI) संपल्यानंतर, उत्खननासाठी कोणतीही पुढील कार्यवाही अवैध आहे. परळी (२०२३), घुंगुर-१ (२०२५) आणि घुंगुर-२ (२०२४) असे तिन्ही प्रकल्प बेकायदेशीर आहेत.',
         quote: 'आपल्या जंगलाचे रक्षण करणे, म्हणजे आपल्या भविष्याचे रक्षण करणे आहे.'
       },
       action: {
@@ -307,14 +317,14 @@ Shahuwadi, Kolhapur.`,
 
 महोदय,
 
-मी शाहूवाडी (कोल्हापूर) येथील निसर्गप्रेमी नागरिक आणि सह्याद्री बचाव मोहिमेचा प्रतिनिधी, या पत्राद्वारे शाहूवाडी तालुक्यातील पार्ली, घुंगुर ब्लॉक-१ आणि घुंगुर ब्लॉक-२ या तीन बॉक्साईट खाण प्रकल्पांबाबत गंभीर कायदेशीर आक्षेप नोंदवत आहे.
+मी शाहूवाडी (कोल्हापूर) येथील निसर्गप्रेमी नागरिक आणि सह्याद्री बचाव मोहिमेचा प्रतिनिधी, या पत्राद्वारे शाहूवाडी तालुक्यातील परळी, घुंगुर ब्लॉक-१ आणि घुंगुर ब्लॉक-२ या तीन बॉक्साईट खाण प्रकल्पांबाबत गंभीर कायदेशीर आक्षेप नोंदवत आहे.
 
 या प्रकल्पांना मंजुरी देणे म्हणजे कायद्याचे आणि पर्यावरणाचे उघड उल्लंघन ठरेल. त्याबाबतचे सविस्तर मुद्दे खालीलप्रमाणे आहेत:
 
 १. प्रकल्पांचे मुदतबाह्य परवाने (Expired Letters of Intent - LoI):
 खनिज सवलत नियमांनुसार, एकदा LoI ची मुदत संपली की तो प्रकल्प कायदेशीररित्या अवैध ठरतो. या तिन्ही प्रकल्पांची स्थिती खालीलप्रमाणे आहे:
 
-पारली बॉक्साईट ब्लॉक (श्री मल्हार मिनरल्स): या प्रकल्पाचा LoI १३/०९/२०२३ रोजीच संपला आहे.
+परळी बॉक्साईट ब्लॉक (श्री मल्हार मिनरल्स): या प्रकल्पाचा LoI १३/०९/२०२३ रोजीच संपला आहे.
 घुंगुर बॉक्साईट ब्लॉक-१ (श्री भैरवनाथ अर्थ मूव्हर्स): याचा LoI १२/०९/२०२५ रोजी संपला आहे.
 घुंगुर बॉक्साईट ब्लॉक-२ (श्री जुगाई मिनरल्स): याचा LoI १२/०९/२०२४ रोजी संपला आहे.
 मुदतबाह्य कागदपत्रांच्या आधारे कोणतीही प्रशासकीय प्रक्रिया पुढे नेणे हे बेकायदेशीर आहे.
@@ -323,7 +333,7 @@ Shahuwadi, Kolhapur.`,
 हे तिन्ही प्रकल्प सह्याद्री व्याघ्र प्रकल्पाच्या (STR) अत्यंत महत्त्वाच्या भ्रमणमार्गात येतात. नॅशनल टायगर कन्झर्वेशन अथॉरिटी (NTCA) कडे सादर केलेल्या व्याघ्र संवर्धन योजनेत (TCP) या गावांचा स्पष्ट उल्लेख 'कॉरिडॉर' म्हणून आहे.
 
 ३. पश्चिम घाट संवेदनशील क्षेत्र (ESA) उल्लंघन:
-पार्ली आणि घुंगुर हे दोन्ही भाग पश्चिम घाटातील 'Ecologically Sensitive Area' (ESA) मध्ये येतात. पार्ली खाण प्रकल्प हा ESA सीमेपासून केवळ ०.२ किमी अंतरावर आहे.
+परळी आणि घुंगुर हे दोन्ही भाग पश्चिम घाटातील 'Ecologically Sensitive Area' (ESA) मध्ये येतात. परळी खाण प्रकल्प हा ESA सीमेपासून केवळ ०.२ किमी अंतरावर आहे.
 
 ४. जनसुनावणीतील त्रुटी (Public Hearing Non-Compliance):
 या प्रकल्पांच्या जनसुनावणी दरम्यान स्थानिक ग्रामस्थांनी उपस्थित केलेल्या महत्त्वाच्या मुद्द्यांना आणि आक्षेपांना प्रकल्प प्रवर्तकांनी अद्याप समाधानकारक लेखी उत्तरे दिलेली नाहीत.
@@ -465,19 +475,19 @@ ${name || '[तुमचे नाव]'}
               <div className="relative z-10 text-center sm:text-left">
                 {!showSuccess ? (
                   <>
-                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-4">{l.modal.title}</h3>
+                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-4">{l?.modal?.title}</h3>
                     <p className="text-gray-500 mb-8 leading-relaxed">
-                      {l.modal.body}
+                      {l?.modal?.body}
                     </p>
                     
                     <div className="space-y-6">
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.modal.label}</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.modal?.label}</label>
                         <input 
                           type="text" 
                           value={userName}
                           onChange={(e) => setUserName(e.target.value)}
-                          placeholder={l.modal.placeholder}
+                          placeholder={l?.modal?.placeholder}
                           autoFocus
                           disabled={isSending}
                           className="w-full px-6 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:border-[#c08b5c] focus:ring-4 focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11] disabled:opacity-50"
@@ -499,9 +509,9 @@ ${name || '[तुमचे नाव]'}
                                 transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
                                 className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
                               />
-                              {l.modal.sending}
+                              {l?.modal?.sending}
                             </>
-                          ) : l.modal.confirm}
+                          ) : l?.modal?.confirm}
                         </motion.button>
                         {!isSending && (
                           <motion.button 
@@ -510,7 +520,7 @@ ${name || '[तुमचे नाव]'}
                             onClick={() => setShowConfirmModal(false)}
                             className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-gray-200 transition-all"
                           >
-                            {l.modal.cancel}
+                            {l?.modal?.cancel}
                           </motion.button>
                         )}
                       </div>
@@ -531,9 +541,9 @@ ${name || '[तुमचे नाव]'}
                         <Check className="w-10 h-10 text-green-600" />
                       </motion.div>
                     </div>
-                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-4">{l.modal.successTitle}</h3>
+                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-4">{l?.modal?.successTitle}</h3>
                     <p className="text-gray-500 mb-8 leading-relaxed max-w-sm mx-auto">
-                      {l.modal.successBody}
+                      {l?.modal?.successBody}
                     </p>
                     <motion.button 
                       whileHover={{ scale: 1.02 }}
@@ -544,7 +554,7 @@ ${name || '[तुमचे नाव]'}
                       }}
                       className="px-12 py-4 bg-[#1b4332] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#0a1f11] transition-all shadow-lg"
                     >
-                      {l.modal.close}
+                      {l?.modal?.close}
                     </motion.button>
                   </motion.div>
                 )}
@@ -560,80 +570,17 @@ ${name || '[तुमचे नाव]'}
       </div>
       
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#0a1f11]/95 sm:bg-[#0a1f11]/95 border-b border-white/5 py-4 px-6 sm:px-8 backdrop-blur-md transition-all">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <div className="p-1 bg-[#c08b5c] rounded">
-                <TreePine className="text-[#0a1f11] w-5 h-5" />
-              </div>
-              <span className="font-serif font-bold text-white tracking-wide text-lg sm:text-xl">
-                Sahyadri Bachav
-              </span>
+      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#0a1f11]/95 border-b border-white/5 py-4 px-6 sm:px-8 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto flex justify-center items-center">
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-[#c08b5c] rounded">
+              <TreePine className="text-[#0a1f11] w-5 h-5" />
             </div>
+            <span className="font-serif font-bold text-white tracking-wide text-lg sm:text-xl">
+              Sahyadri Bachav
+            </span>
           </div>
-          
-          <div className="hidden md:flex items-center gap-8 text-[#f9f7f2]/80 text-xs font-bold uppercase tracking-widest">
-            <a href="#about" className="hover:text-[#c08b5c] transition-colors">{l?.nav.crisis}</a>
-            <a href="#stats" className="hover:text-[#c08b5c] transition-colors">{l?.nav.stats}</a>
-            <button 
-              onClick={() => setSelectedLanguage(selectedLanguage === 'en' ? 'mr' : 'en')}
-              className="px-3 py-1 border border-white/20 rounded text-[10px] hover:bg-white/10 transition-colors"
-            >
-              {selectedLanguage === 'en' ? 'मराठी' : 'English'}
-            </button>
-            <a href="#action" className="px-5 py-2 bg-[#c08b5c] text-[#0a1f11] rounded hover:bg-[#c08b5c]/80 transition-colors">{l?.nav.action}</a>
-          </div>
-
-          <button 
-            className="md:hidden text-white p-2"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
         </div>
-
-        {/* Mobile Menu Overlay */}
-        <AnimatePresence>
-          {isMobileMenuOpen && l && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-[#0a1f11] border-t border-white/5 overflow-hidden shadow-2xl"
-            >
-              <div className="flex flex-col p-6 gap-5 text-[#f9f7f2]/80 text-xs font-black uppercase tracking-[0.2em]">
-                <a 
-                  href="#about" 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="hover:text-[#c08b5c] transition-colors py-3 border-b border-white/5"
-                >
-                  {l.nav.crisis}
-                </a>
-                <a 
-                  href="#stats" 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="hover:text-[#c08b5c] transition-colors py-3 border-b border-white/5"
-                >
-                  {l.nav.stats}
-                </a>
-                <a 
-                  href="#action" 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="w-full text-center py-4 bg-[#c08b5c] text-[#0a1f11] rounded-xl font-black mt-2"
-                >
-                  {l.nav.action}
-                </a>
-                <button 
-                  onClick={() => { setSelectedLanguage(selectedLanguage === 'en' ? 'mr' : 'en'); setIsMobileMenuOpen(false); }}
-                  className="text-center py-4 text-[#c08b5c] border border-[#c08b5c]/20 rounded-xl"
-                >
-                  {selectedLanguage === 'en' ? 'Switch to मराठी' : 'Switch to English'}
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </nav>
 
       {/* Hero Section */}
@@ -647,11 +594,11 @@ ${name || '[तुमचे नाव]'}
             >
               <div className="flex items-center justify-center gap-3 sm:gap-4 mb-6 sm:mb-8">
                 <div className="w-6 sm:w-16 h-px bg-[#c08b5c]/30" />
-                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-[#c08b5c]">{l?.hero.alert}</span>
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-[#c08b5c]">{l?.hero?.alert}</span>
                 <div className="w-6 sm:w-16 h-px bg-[#c08b5c]/30" />
               </div>
               <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[10rem] font-serif font-black text-white leading-[1] sm:leading-[0.8] mb-8 sm:mb-12 tracking-tight">
-                {l?.hero.title.split(' ')[0]} <br className="hidden sm:block"/><span className="text-[#c08b5c]">{l?.hero.title.split(' ')[1]}</span>
+                {l?.hero?.title?.split(' ')[0]} <br className="hidden sm:block"/><span className="text-[#c08b5c]">{l?.hero?.title?.split(' ')[1]}</span>
               </h1>
 
               {/* Momentum Counter */}
@@ -669,27 +616,21 @@ ${name || '[तुमचे नाव]'}
                       {sendCount.toLocaleString()}
                     </span>
                     <span className="block text-white/40 text-[10px] uppercase tracking-widest font-bold">
-                      {l?.impact.label}
+                      {l?.impact?.label}
                     </span>
                   </div>
                 </div>
               </div>
 
               <p className={`${selectedLanguage === 'mr' ? 'font-marathi' : 'font-sans'} text-lg sm:text-2xl md:text-3xl lg:text-4xl text-white/70 font-medium leading-[1.4] sm:leading-relaxed mb-10 sm:mb-14 max-w-2xl mx-auto`}>
-                {l?.hero.subtitle}
+                {l?.hero?.subtitle}
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
                 <a 
                   href="#action" 
                   className="w-full sm:w-auto px-10 py-5 sm:py-6 bg-[#c08b5c] text-[#0a1f11] rounded-full font-black uppercase tracking-[0.2em] text-[10px] sm:text-xs hover:bg-[#b07b4c] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 shadow-[0_20px_50px_rgba(192,139,92,0.15)]"
                 >
-                  {l?.hero.ctaAction} <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                </a>
-                <a 
-                  href="#about" 
-                  className="w-full sm:w-auto px-10 py-5 sm:py-6 border border-white/20 text-white rounded-full font-black uppercase tracking-[0.2em] text-[10px] sm:text-xs backdrop-blur-sm hover:bg-white/10 active:scale-95 transition-all text-center"
-                >
-                  {l?.hero.ctaEvidence}
+                  {l?.hero?.ctaAction} <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                 </a>
               </div>
             </motion.div>
@@ -701,19 +642,19 @@ ${name || '[तुमचे नाव]'}
       <section id="stats" className="bg-[#f9f7f2] text-[#0a1f11] py-24 px-6 relative">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-0 border border-[#0a1f11]/10 rounded-[2rem] sm:rounded-3xl overflow-hidden shadow-sm bg-white">
           <div className="p-6 sm:p-12 border-b md:border-b-0 md:border-r border-[#0a1f11]/5 group hover:bg-[#c08b5c]/5 transition-colors">
-            <span className="text-[#c08b5c] font-black text-[10px] sm:text-xs uppercase tracking-widest mb-4 block">{l?.stats.violation.label}</span>
-            <h3 className="text-3xl sm:text-5xl font-serif text-[#0a1f11] mb-5 sm:mb-6">{l?.stats.violation.title}</h3>
-            <p className="text-gray-500 leading-relaxed text-sm">{l?.stats.violation.body}</p>
+            <span className="text-[#c08b5c] font-black text-[10px] sm:text-xs uppercase tracking-widest mb-4 block">{l?.stats?.violation?.label}</span>
+            <h3 className="text-3xl sm:text-5xl font-serif text-[#0a1f11] mb-5 sm:mb-6">{l?.stats?.violation?.title}</h3>
+            <p className="text-gray-500 leading-relaxed text-sm">{l?.stats?.violation?.body}</p>
           </div>
           <div className="p-6 sm:p-12 border-b md:border-b-0 md:border-r border-[#0a1f11]/5 group hover:bg-[#c08b5c]/5 transition-colors">
-            <span className="text-[#c08b5c] font-black text-[10px] sm:text-xs uppercase tracking-widest mb-4 block">{l?.stats.migration.label}</span>
-            <h3 className="text-3xl sm:text-5xl font-serif text-[#0a1f11] mb-5 sm:mb-6">{l?.stats.migration.title}</h3>
-            <p className="text-gray-500 leading-relaxed text-sm">{l?.stats.migration.body}</p>
+            <span className="text-[#c08b5c] font-black text-[10px] sm:text-xs uppercase tracking-widest mb-4 block">{l?.stats?.migration?.label}</span>
+            <h3 className="text-3xl sm:text-5xl font-serif text-[#0a1f11] mb-5 sm:mb-6">{l?.stats?.migration?.title}</h3>
+            <p className="text-gray-500 leading-relaxed text-sm">{l?.stats?.migration?.body}</p>
           </div>
           <div className="p-6 sm:p-12 group hover:bg-[#c08b5c]/5 transition-colors">
-            <span className="text-[#c08b5c] font-black text-[10px] sm:text-xs uppercase tracking-widest mb-4 block">{l?.stats.protection.label}</span>
-            <h3 className="text-3xl sm:text-5xl font-serif text-[#0a1f11] mb-5 sm:mb-6">{l?.stats.protection.title}</h3>
-            <p className="text-gray-500 leading-relaxed text-sm">{l?.stats.protection.body}</p>
+            <span className="text-[#c08b5c] font-black text-[10px] sm:text-xs uppercase tracking-widest mb-4 block">{l?.stats?.protection?.label}</span>
+            <h3 className="text-3xl sm:text-5xl font-serif text-[#0a1f11] mb-5 sm:mb-6">{l?.stats?.protection?.title}</h3>
+            <p className="text-gray-500 leading-relaxed text-sm">{l?.stats?.protection?.body}</p>
           </div>
         </div>
       </section>
@@ -723,25 +664,82 @@ ${name || '[तुमचे नाव]'}
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <div className="inline-block px-4 py-2 bg-[#c08b5c]/10 rounded-full border border-[#c08b5c]/20">
             <span className="text-[10px] font-black uppercase tracking-widest text-[#c08b5c] flex items-center gap-2">
-              <AlertTriangle className="w-3 h-3 text-red-500" /> {l?.biodiversity.badge}
+              <AlertTriangle className="w-3 h-3 text-red-500" /> {l?.biodiversity?.badge}
             </span>
           </div>
           <div className="space-y-4">
-            <span className="font-black text-[10px] sm:text-xs uppercase tracking-[0.4em] text-[#c08b5c] block">{l?.biodiversity.envImpact}</span>
-            <h2 className="text-3xl sm:text-6xl md:text-7xl font-serif font-black text-white leading-tight px-2">{l?.biodiversity.title}</h2>
+            <span className="font-black text-[10px] sm:text-xs uppercase tracking-[0.4em] text-[#c08b5c] block">{l?.biodiversity?.envImpact}</span>
+            <h2 className="text-3xl sm:text-6xl md:text-7xl font-serif font-black text-white leading-tight px-2">{l?.biodiversity?.title}</h2>
           </div>
           <p className="text-base sm:text-2xl text-white/60 leading-relaxed font-light px-2 sm:px-0">
-            {l?.biodiversity.body}
+            {l?.biodiversity?.body}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-6 sm:pt-8">
-            <div className="p-6 sm:p-8 bg-white/5 rounded-3xl border border-white/5 text-left">
-              <h5 className="font-black text-[10px] uppercase tracking-widest text-[#c08b5c] mb-3 sm:mb-4">{l?.biodiversity.risk}</h5>
-              <p className="text-lg sm:text-xl font-bold text-white leading-tight">{l?.biodiversity.riskSpecies}</p>
-            </div>
-            <div className="p-6 sm:p-8 bg-white/5 rounded-3xl border border-white/5 text-left">
-              <h5 className="font-black text-[10px] uppercase tracking-widest text-[#c08b5c] mb-3 sm:mb-4">{l?.biodiversity.avian}</h5>
-              <p className="text-lg sm:text-xl font-bold text-white leading-tight">{l?.biodiversity.avianSpecies}</p>
-            </div>
+            <motion.div 
+              layout
+              className="p-6 sm:p-8 bg-white/5 rounded-3xl border border-white/5 text-left h-fit"
+            >
+              <h5 className="font-black text-[10px] uppercase tracking-widest text-[#c08b5c] mb-3 sm:mb-4">{l?.biodiversity?.risk}</h5>
+              <p className="text-lg sm:text-xl font-bold text-white leading-tight mb-4">{l?.biodiversity?.riskSpecies}</p>
+              
+              <button 
+                onClick={() => setExpandedBio(prev => ({ ...prev, risk: !prev['risk'] }))}
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-[#c08b5c] transition-colors"
+              >
+                {expandedBio['risk'] ? l?.biodiversity?.showLess : l?.biodiversity?.showMore}
+                <motion.div animate={{ rotate: expandedBio['risk'] ? 180 : 0 }}>
+                  <ChevronDown className="w-3 h-3" />
+                </motion.div>
+              </button>
+
+              <AnimatePresence>
+                {expandedBio['risk'] && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <p className="pt-4 text-sm text-white/50 leading-relaxed font-light">
+                      {l?.biodiversity?.riskDetails}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            <motion.div 
+              layout
+              className="p-6 sm:p-8 bg-white/5 rounded-3xl border border-white/5 text-left h-fit"
+            >
+              <h5 className="font-black text-[10px] uppercase tracking-widest text-[#c08b5c] mb-3 sm:mb-4">{l?.biodiversity?.avian}</h5>
+              <p className="text-lg sm:text-xl font-bold text-white leading-tight mb-4">{l?.biodiversity?.avianSpecies}</p>
+
+              <button 
+                onClick={() => setExpandedBio(prev => ({ ...prev, avian: !prev['avian'] }))}
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-[#c08b5c] transition-colors"
+              >
+                {expandedBio['avian'] ? l?.biodiversity?.showLess : l?.biodiversity?.showMore}
+                <motion.div animate={{ rotate: expandedBio['avian'] ? 180 : 0 }}>
+                  <ChevronDown className="w-3 h-3" />
+                </motion.div>
+              </button>
+
+              <AnimatePresence>
+                {expandedBio['avian'] && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <p className="pt-4 text-sm text-white/50 leading-relaxed font-light">
+                      {l?.biodiversity?.avianDetails}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -750,20 +748,20 @@ ${name || '[तुमचे नाव]'}
       <section id="about" className="py-20 sm:py-32 px-6 bg-[#f9f7f2]">
         <div className="max-w-4xl mx-auto space-y-12">
           <div className="text-center">
-            <span className="font-black text-[10px] uppercase tracking-[0.4em] text-[#c08b5c] block mb-4">{l?.crisis.investigation}</span>
-            <h2 className="text-3xl sm:text-6xl md:text-7xl font-serif font-black text-[#0a1f11] leading-tight px-2">{l?.crisis.title}</h2>
+            <span className="font-black text-[10px] uppercase tracking-[0.4em] text-[#c08b5c] block mb-4">{l?.crisis?.investigation}</span>
+            <h2 className="text-3xl sm:text-6xl md:text-7xl font-serif font-black text-[#0a1f11] leading-tight px-2">{l?.crisis?.title}</h2>
           </div>
           
           <div className="space-y-8 text-base sm:text-xl text-gray-700 leading-relaxed text-center sm:text-center">
-            <p className="font-light px-2 sm:px-0">{l?.crisis.body}</p>
+            <p className="font-light px-2 sm:px-0">{l?.crisis?.body}</p>
             <div className="bg-white rounded-[2rem] p-6 sm:p-12 border border-[#0a1f11]/5 shadow-sm text-left">
               <h4 className="font-bold text-[#0a1f11] text-lg sm:text-xl mb-4 sm:mb-6 flex items-center gap-3">
-                <Landmark className="w-5 h-5 sm:w-6 sm:h-6 text-[#c08b5c]" /> {l?.crisis.violationDetails}
+                <Landmark className="w-5 h-5 sm:w-6 sm:h-6 text-[#c08b5c]" /> {l?.crisis?.violationDetails}
               </h4>
-              <p className="text-gray-500 leading-relaxed text-sm sm:text-base">{l?.crisis.violationBody}</p>
+              <p className="text-gray-500 leading-relaxed text-sm sm:text-base">{l?.crisis?.violationBody}</p>
             </div>
             <p className={`text-xl sm:text-4xl font-bold text-[#1b4332] italic mt-12 px-2 ${selectedLanguage === 'mr' ? 'font-marathi' : 'font-serif'}`}>
-              "{l?.crisis.quote}"
+              "{l?.crisis?.quote}"
             </p>
           </div>
         </div>
@@ -790,7 +788,7 @@ ${name || '[तुमचे नाव]'}
                 </motion.div>
               )}
             </motion.div>
-            <h2 className="text-4xl sm:text-6xl md:text-8xl font-serif text-white font-black mb-8">{l?.action.title}</h2>
+            <h2 className="text-4xl sm:text-6xl md:text-8xl font-serif text-white font-black mb-8">{l?.action?.title}</h2>
             
             {/* Impact Highlight */}
             <div className="flex flex-col items-center gap-2 mb-8">
@@ -798,12 +796,12 @@ ${name || '[तुमचे नाव]'}
                 {sendCount.toLocaleString()}+
               </span>
               <span className="text-white/40 font-black text-[10px] sm:text-xs uppercase tracking-[0.5em]">
-                {l?.impact.label}
+                {l?.impact?.label}
               </span>
             </div>
 
             <p className="text-white/60 text-base sm:text-xl max-w-2xl mx-auto font-light leading-relaxed px-4">
-              {l?.action.subtitle}
+              {l?.action?.subtitle}
             </p>
           </div>
 
@@ -832,20 +830,20 @@ ${name || '[तुमचे नाव]'}
               <div className="space-y-8">
                 <div>
                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-[#c08b5c] mb-6 flex items-center gap-2">
-                    <Info className="w-3 h-3" /> {l?.action.stepTitle}
+                    <Info className="w-3 h-3" /> {l?.action?.stepTitle}
                   </h4>
                   <ul className="space-y-8">
                     <li className="flex gap-5">
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#0a1f11] text-white flex items-center justify-center font-bold text-xs">1</div>
-                      <p className="text-gray-600 leading-tight pt-1">{l?.action.step1}</p>
+                      <p className="text-gray-600 leading-tight pt-1">{l?.action?.step1}</p>
                     </li>
                     <li className="flex gap-5">
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#0a1f11] text-white flex items-center justify-center font-bold text-xs">2</div>
-                      <p className="text-gray-600 leading-tight pt-1">{l?.action.step2}</p>
+                      <p className="text-gray-600 leading-tight pt-1">{l?.action?.step2}</p>
                     </li>
                     <li className="flex gap-5">
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#0a1f11] text-white flex items-center justify-center font-bold text-xs">3</div>
-                      <p className="text-gray-600 leading-tight pt-1">{l?.action.step3}</p>
+                      <p className="text-gray-600 leading-tight pt-1">{l?.action?.step3}</p>
                     </li>
                   </ul>
                 </div>
@@ -856,10 +854,10 @@ ${name || '[तुमचे नाव]'}
                     onClick={handleSendAction}
                     className="w-full py-6 bg-[#1b4332] text-white rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl hover:bg-[#0a1f11] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 no-underline text-center"
                   >
-                    {l?.action.cta} <ExternalLink className="w-5 h-5" />
+                    {l?.action?.cta} <ExternalLink className="w-5 h-5" />
                   </a>
                   <p className="mt-4 text-[10px] text-gray-400 text-center flex items-center justify-center gap-1">
-                    <Info className="w-3 h-3" /> {l?.action.copyNote}
+                    <Info className="w-3 h-3" /> {l?.action?.copyNote}
                   </p>
                 </div>
               </div>
@@ -872,14 +870,14 @@ ${name || '[तुमचे नाव]'}
                 
                 <div className="relative z-10 space-y-8">
                   <div className="border-b border-[#0a1f11]/5 pb-6">
-                    <h5 className="font-serif font-black text-[#0a1f11] text-xl mb-1">{l?.fallback.title}</h5>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">{l?.action.copyNote}</p>
+                    <h5 className="font-serif font-black text-[#0a1f11] text-xl mb-1">{l?.fallback?.title}</h5>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">{l?.action?.copyNote}</p>
                   </div>
 
                   {/* Recipients Field */}
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback.to}</label>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback?.to}</label>
                       <button 
                         onClick={() => copyToClipboard(recipients.join(','), 'to')}
                         className={`w-full sm:w-auto min-w-[120px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-[10px] font-bold transition-all overflow-hidden ${
@@ -897,7 +895,7 @@ ${name || '[तुमचे नाव]'}
                               exit={{ opacity: 0, y: -10 }}
                               className="flex items-center gap-2"
                             >
-                              <Check className="w-3 h-3" /> {l?.fallback.copied}
+                              <Check className="w-3 h-3" /> {l?.fallback?.copied}
                             </motion.span>
                           ) : (
                             <motion.span
@@ -907,7 +905,7 @@ ${name || '[तुमचे नाव]'}
                               exit={{ opacity: 0, y: -10 }}
                               className="flex items-center gap-2"
                             >
-                              <Copy className="w-3 h-3" /> {l?.fallback.copyTo}
+                              <Copy className="w-3 h-3" /> {l?.fallback?.copyTo}
                             </motion.span>
                           )}
                         </AnimatePresence>
@@ -924,7 +922,7 @@ ${name || '[तुमचे नाव]'}
                   {/* CC Field */}
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback.cc}</label>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback?.cc}</label>
                       <button 
                         onClick={() => copyToClipboard(ccEmails.join(','), 'cc')}
                         className={`w-full sm:w-auto min-w-[120px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-[10px] font-bold transition-all overflow-hidden ${
@@ -942,7 +940,7 @@ ${name || '[तुमचे नाव]'}
                               exit={{ opacity: 0, y: -10 }}
                               className="flex items-center gap-2"
                             >
-                              <Check className="w-3 h-3" /> {l?.fallback.copied}
+                              <Check className="w-3 h-3" /> {l?.fallback?.copied}
                             </motion.span>
                           ) : (
                             <motion.span
@@ -952,7 +950,7 @@ ${name || '[तुमचे नाव]'}
                               exit={{ opacity: 0, y: -10 }}
                               className="flex items-center gap-2"
                             >
-                              <Copy className="w-3 h-3" /> {l?.fallback.copyCC}
+                              <Copy className="w-3 h-3" /> {l?.fallback?.copyCC}
                             </motion.span>
                           )}
                         </AnimatePresence>
@@ -969,7 +967,7 @@ ${name || '[तुमचे नाव]'}
                   {/* Subject Field */}
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback.subject}</label>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback?.subject}</label>
                       <button 
                         onClick={() => copyToClipboard(emailData[activeTab].subject, 'subject')}
                         className={`w-full sm:w-auto min-w-[120px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-[10px] font-bold transition-all overflow-hidden ${
@@ -987,7 +985,7 @@ ${name || '[तुमचे नाव]'}
                               exit={{ opacity: 0, y: -10 }}
                               className="flex items-center gap-2"
                             >
-                              <Check className="w-3 h-3" /> {l?.fallback.copied}
+                              <Check className="w-3 h-3" /> {l?.fallback?.copied}
                             </motion.span>
                           ) : (
                             <motion.span
@@ -997,7 +995,7 @@ ${name || '[तुमचे नाव]'}
                               exit={{ opacity: 0, y: -10 }}
                               className="flex items-center gap-2"
                             >
-                              <Copy className="w-3 h-3" /> {l?.fallback.copySubject}
+                              <Copy className="w-3 h-3" /> {l?.fallback?.copySubject}
                             </motion.span>
                           )}
                         </AnimatePresence>
@@ -1014,7 +1012,7 @@ ${name || '[तुमचे नाव]'}
                   {/* Body Field */}
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback.body}</label>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback?.body}</label>
                       <button 
                         onClick={() => copyToClipboard(finalBody, 'body')}
                         className={`w-full sm:w-auto min-w-[140px] flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-bold transition-all overflow-hidden ${
@@ -1032,7 +1030,7 @@ ${name || '[तुमचे नाव]'}
                               exit={{ opacity: 0, y: -10 }}
                               className="flex items-center gap-2"
                             >
-                              <Check className="w-3 h-3" /> {l?.fallback.copied}
+                              <Check className="w-3 h-3" /> {l?.fallback?.copied}
                             </motion.span>
                           ) : (
                             <motion.span
@@ -1042,7 +1040,7 @@ ${name || '[तुमचे नाव]'}
                               exit={{ opacity: 0, y: -10 }}
                               className="flex items-center gap-2"
                             >
-                              <Copy className="w-3 h-3" /> {l?.fallback.copyBody}
+                              <Check className="w-3 h-3" /> {l?.fallback?.copyBody}
                             </motion.span>
                           )}
                         </AnimatePresence>
@@ -1076,12 +1074,12 @@ ${name || '[तुमचे नाव]'}
               <span className="font-serif font-black text-white text-3xl tracking-tight">Sahyadri Bachav</span>
             </div>
             <p className="text-white/40 text-sm max-w-sm tracking-wide leading-relaxed">
-              {l?.footer.about}
+              {l?.footer?.about}
             </p>
           </div>
           
           <div className="text-right space-y-4">
-            <a href="#" className="block text-[#c08b5c] font-black text-xs uppercase tracking-widest hover:text-white transition-colors">{l?.footer.top}</a>
+            <a href="#" className="block text-[#c08b5c] font-black text-xs uppercase tracking-widest hover:text-white transition-colors">{l?.footer?.top}</a>
             <p className="text-[10px] text-white/20 uppercase tracking-[0.5em]">Kolhapur, India © 2026</p>
           </div>
         </div>
