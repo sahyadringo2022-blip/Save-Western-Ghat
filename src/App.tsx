@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis, Cell, LabelList } from 'recharts';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -12,7 +13,10 @@ import {
   addDoc,
   writeBatch,
   getDocFromServer,
-  initializeFirestore
+  initializeFirestore,
+  query,
+  getDocs,
+  orderBy
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { 
@@ -40,19 +44,32 @@ const db = initializeFirestore(app, {
 }, (firebaseConfig as any).firestoreDatabaseId);
 
 export default function App() {
+  const [activeView, setActiveView] = useState<'main' | 'investigation'>('main');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'mr' | null>(null);
   const [activeTab, setActiveTab] = useState<'mr' | 'en'>('mr');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [userName, setUserName] = useState('');
+  const [userLocation, setUserLocation] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [locationError, setLocationError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showExternalModal, setShowExternalModal] = useState(false);
+  const [pendingExternalUrl, setPendingExternalUrl] = useState('');
   const [expandedEvidence, setExpandedEvidence] = useState<Record<number, boolean>>({});
   const [expandedBio, setExpandedBio] = useState<Record<string, boolean>>({});
 
   const [sendCount, setSendCount] = useState(0); 
   const [hasSent, setHasSent] = useState(false);
+  const [chartData, setChartData] = useState([
+    { name: 'Week 1', appeals: 0 },
+    { name: 'Week 2', appeals: 0 },
+    { name: 'Week 3', appeals: 0 },
+    { name: 'Current', appeals: 0 }
+  ]);
 
   // Firebase Error Handler
   const handleFirestoreError = (error: any, operation: string) => {
@@ -77,10 +94,52 @@ export default function App() {
     };
     testConnection();
 
+    const fetchHistoricalData = async () => {
+      try {
+        const q = query(collection(db, 'submissions'), orderBy('timestamp', 'asc'));
+        const sn = await getDocs(q);
+        const now = Date.now();
+        const oneWeek = 7 * 24 * 60 * 60 * 1000;
+        let w1 = 0, w2 = 0, w3 = 0, current = 0;
+        sn.forEach(d => {
+          const t = d.data().timestamp;
+          // Use the timestamp fallback to avoid a crash if evaluated locally immediately before sync
+          const time = t && typeof t.toMillis === 'function' ? t.toMillis() : Date.now();
+          const diff = now - time;
+          if (diff < oneWeek) current++;
+          else if (diff < 2 * oneWeek) w3++;
+          else if (diff < 3 * oneWeek) w2++;
+          else w1++;
+        });
+        setChartData([
+          { name: 'Week 1', appeals: w1 },
+          { name: 'Week 2', appeals: w2 },
+          { name: 'Week 3', appeals: w3 },
+          { name: 'Current', appeals: current }
+        ]);
+      } catch (error) {
+        console.error("Failed to fetch historical chart data:", error);
+      }
+    };
+    fetchHistoricalData();
+
     const unsubscribe = onSnapshot(doc(db, 'stats', 'global'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        setSendCount(data.appealCount || 0);
+        const count = data.appealCount || 0;
+        setSendCount(count);
+        
+        // Ensure "Current" reflects at least the snapshot total if it's the only data we have 
+        // to avoid an empty bar chart. If there is actual historical data, we will just use the real sum.
+        setChartData(prev => {
+          const hasHistory = prev[0].appeals > 0 || prev[1].appeals > 0 || prev[2].appeals > 0;
+          return [
+            prev[0],
+            prev[1],
+            prev[2],
+            { name: 'Current', appeals: hasHistory ? prev[3].appeals : count }
+          ];
+        });
       }
     }, (error) => handleFirestoreError(error, 'onSnapshot'));
 
@@ -89,7 +148,7 @@ export default function App() {
 
   const content = {
     en: {
-      nav: { crisis: 'The Crisis', stats: 'Legal Status', action: 'Take Action' },
+      nav: { crisis: 'The Crisis', stats: 'Legal Status', action: 'Take Action', nexus: 'The Nexus' },
       hero: {
         alert: 'Emergency Conservation Appeal',
         title: 'Save Sahyadri',
@@ -139,6 +198,29 @@ export default function App() {
         label: 'Appeals Sent So Far',
         unit: 'Citizens'
       },
+      investigation: {
+        title: 'The Nexus: Profit vs Nature',
+        subtitle: 'An investigative report into how high-level politics and corporate interests are stripping the Sahyadri Tiger Corridor of its legal protection.',
+        back: 'Back to Campaign',
+        sections: [
+          {
+            title: 'The Tiger Corridor Deletion',
+            body: 'Environmentalists and the Sahyadri Bachav Sanghatana have flagged a calculated attempt by the State Forest Department to exclude villages like Parali, Ghungur, and Yelvan Jugai from the Sahyadri Tiger Reserve Conservation Plan. By redrawing these boundaries, the projects deliberately bypass the mandatory National Tiger Conservation Authority (NTCA) oversight.'
+          },
+          {
+            title: 'Political Patronage',
+            body: 'Local political leadership, including reports pointing to the influence of representatives like MLA Vinay Kore, has consistently prioritized mining "development" over the UNESCO World Heritage status of the Western Ghats. Lobbying efforts have been documented to shrink the Eco-Sensitive Zone (ESZ) buffers around Shahuwadi, specifically to accommodate the 3 bauxite blocks.'
+          },
+          {
+            title: 'The Profit Motive',
+            body: 'Each of the 3 mining blocks—Perli, Ghungur-I, and Ghungur-II—contains high-grade bauxite worth thousands of crores. The proponents (Shree Malhar Minerals, Shree Bhairavnath Earth Movers, and Shri Jugai Minerals) are aggressively pushing for clearances despite their Letters of Intent (LoI) having expired between 2023 and 2025.'
+          },
+          {
+            title: 'Ecological Sabotage',
+            body: 'While official records claim "minimum impact," these areas are documented movement paths for tigers moving from Radhanagari and Goa towards STR. Deleting these areas from the corridor plan is an act of ecological sabotage that violates the Wildlife (Protection) Act, 1972.'
+          }
+        ]
+      },
       gallery: {
         title: 'Government Records',
         subtitle: 'Official proof of the legal violations across the 3 contested blocks.',
@@ -147,7 +229,13 @@ export default function App() {
           { name: 'Perli Bauxite Block', proponent: 'Shree Malhar Minerals', status: 'LoI Expired (2023)', url:'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F557966%2F2025&proposal=350503578' },
           { name: 'Ghungur Block-I', proponent: 'Shree Bhairavnath Earth Movers', status: 'LoI Expired (2025)', url:'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F544562%2F2025&proposal=131987801' },
           { name: 'Ghungur Block-II', proponent: 'Shri Jugai Minerals', status: 'LoI Expired (2024)', url:'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F545254%2F2025&proposal=132332846' }
-        ]
+        ],
+        externalModal: {
+          title: 'Leaving Sahyadri Bachav',
+          body: 'You are about to open an external government website (parivesh.nic.in) in a new tab.',
+          cancel: 'Stay Here',
+          continue: 'Continue to Site'
+        }
       },
       footer: {
         about: 'A community-led campaign for the preservation of the Shahuwadi eco-sensitive zone and the protection of the Sahyadri Tiger Corridor from illegal mining encroachment.',
@@ -158,6 +246,8 @@ export default function App() {
         body: 'To make your objection legally valid, please enter your full name. This will be dynamically inserted into the official appeal.',
         label: 'Your Full Name',
         placeholder: 'Enter your name here...',
+        locationLabel: 'Village / Taluka',
+        locationPlaceholder: 'e.g. Shahuwadi, Kolhapur',
         confirm: 'Confirm & Send',
         cancel: 'Cancel',
         sending: 'Processing...',
@@ -179,7 +269,7 @@ export default function App() {
       }
     },
     mr: {
-      nav: { crisis: 'संकट', stats: 'कायदेशीर स्थिती', action: 'कृती करा' },
+      nav: { crisis: 'संकट', stats: 'कायदेशीर स्थिती', action: 'कृती करा', nexus: 'जाचा' },
       hero: {
         alert: 'तात्काळ संवर्धन आवाहन',
         title: 'सह्याद्री वाचवा',
@@ -233,6 +323,8 @@ export default function App() {
         body: 'तुमचा आक्षेप कायदेशीररित्या ग्राह्य धरण्यासाठी, कृपया तुमचे पूर्ण नाव प्रविष्ट करा. हे नाव ईमेलमध्ये समाविष्ट केले जाईल.',
         label: 'तुमचे पूर्ण नाव',
         placeholder: 'येथे तुमचे नाव लिहा...',
+        locationLabel: 'गाव / तालुका',
+        locationPlaceholder: 'उदा. शाहूवाडी, कोल्हापूर',
         confirm: 'खात्री करा आणि पाठवा',
         cancel: 'रद्द करा',
         sending: 'प्रक्रिया सुरू आहे...',
@@ -245,6 +337,29 @@ export default function App() {
         label: 'आतापर्यंत पाठवलेली अपील्स',
         unit: 'नागरिक'
       },
+      investigation: {
+        title: 'नेक्सस: नफा विरुद्ध निसर्ग',
+        subtitle: 'उच्चस्तरीय राजकारण आणि कॉर्पोरेट हितसंबंध कशा प्रकारे सह्याद्री व्याघ्र कॉरिडॉरचे कायदेशीर संरक्षण काढून घेत आहेत, याचा शोध अहवाल.',
+        back: 'मोहिमेवर परत या',
+        sections: [
+          {
+            title: 'व्याघ्र भ्रमणमार्ग वगळण्याचे षडयंत्र',
+            body: 'पर्यावरणवाद्यांनी आणि सह्याद्री बचाव संघटनेने राज्य वनविभागाच्या त्या प्रयत्नांचा पर्दाफाश केला आहे, ज्यामध्ये परळी, घुंगुर आणि येळवण जुगाई या गावांना सह्याद्री व्याघ्र संवर्धन आराखड्याबाहेर ठेवण्याचा प्रयत्न केला जात आहे. या सीमा बदलून, हे प्रकल्प जाणीवपूर्वक राष्ट्रीय व्याघ्र संवर्धन प्राधिकरण (NTCA) कडून मिळणारी तपासणी टाळत आहेत.'
+          },
+          {
+            title: 'राजकीय वरदहस्त',
+            body: 'स्थानिक राजकीय नेतृत्व, ज्यात आमदार विनय कोरे यांच्या प्रभावाचे निर्देश देणारे अहवाल आहेत, त्यांनी पश्चिम घाटाच्या युनेस्को जागतिक वारसा दर्जापेक्षा खाणकाम "विकासाला" सातत्याने प्राधान्य दिले आहे. कोल्हापूर जिल्ह्यातील शाहूवाडी तालुक्यातील या ३ बॉक्साईड ब्लॉक्सना सोयीचे व्हावे म्हणून पर्यावरण संवेदनशील क्षेत्र (ESZ) कमी करण्यासाठी लॉबिंग केल्याचे दस्तऐवजीकरण झाले आहे.'
+          },
+          {
+            title: 'नफ्याचा उद्देश',
+            body: 'परळी, घुंगुर-१ आणि घुंगुर-२ या तिन्ही खाण ब्लॉक्समध्ये हजारो कोटींचे उच्च दर्जाचे बॉक्साईड आहे. श्री मल्हार मिनरल्स, श्री भैरवनाथ अर्थ मूव्हर्स आणि श्री जुगाई मिनरल्स हे प्रवर्तक, त्यांचे लेटर ऑफ इंटेंट (LoI) २०२३ ते २०२५ दरम्यान संपले असूनही, वन आणि पर्यावरण मंजुरी मिळवण्यासाठी आक्रमकपणे प्रयत्न करत आहेत.'
+          },
+          {
+            title: 'पर्यावरणीय घातपात',
+            body: 'अधिकृत नोंदी "किमान परिणाम" दर्शवत असल्या तरी, हे भाग राधानगरी आणि गोव्याकडून सह्याद्री व्याघ्र प्रकल्पाकडे जाणाऱ्या वाघांचे दस्तऐवजीकरण केलेले भ्रमणमार्ग आहेत. कॉरिडोर आराखड्यातून हे क्षेत्र वगळणे हा पर्यावरणीय घातपात असून वन्यजीव (संरक्षण) कायदा १९७२ चे उल्लंघन आहे.'
+          }
+        ]
+      },
       gallery: {
         title: 'शासकीय दस्ताऐवज',
         subtitle: '३ वादग्रस्त ब्लॉकमधील कायदेशीर उल्लंघनांचा अधिकृत पुरावा.',
@@ -253,7 +368,13 @@ export default function App() {
           { name: 'परळी बॉक्साईड ब्लॉक', proponent: 'श्री मल्हार मिनरल्स', status: 'LoI मुदतबाह्य (२०२३)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F557966%2F2025&proposal=350503578' },
           { name: 'घुंगुर ब्लॉक-१', proponent: 'श्री भैरवनाथ अर्थ मूव्हर्स', status: 'LoI मुदतबाह्य (२०२५)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F544562%2F2025&proposal=131987801' },
           { name: 'घुंगुर ब्लॉक-२', proponent: 'श्री जुगाई मिनरल्स', status: 'LoI मुदतबाह्य (२०२४)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F545254%2F2025&proposal=132332846' }
-        ]
+        ],
+        externalModal: {
+          title: 'सह्याद्री बचाव सोडत आहात?',
+          body: 'तुम्ही आता बाह्य सरकारी वेबसाइट (parivesh.nic.in) उघडणार आहात. ही वेबसाइट नवीन टॅबमध्ये उघडेल.',
+          cancel: 'मागे फिरा',
+          continue: 'पुढे जा'
+        }
       },
       fallback: {
         title: 'मॅन्युअल कॉपी (ईमेल उघडत नसल्यास)',
@@ -274,97 +395,97 @@ export default function App() {
 
   const recipients = [
     'seiaa.mah@gmail.com', 
+    'seiaamaharashtra@gmail.com',
+    'mhseac.1@gmail.com',
+    'pccfngp@mahaforest.gov.in',
+    'envd.mm@nic.in',
+    'rokolhapur@mpcb.gov.in',
+    'ms-ntca@nic.in',
+    'ig-ntca@nic.in',
+    'krishnendu.mondal@gov.in',
     'pccfwl@mahaforest.gov.in', 
     'dcf.kolhapur@gmail.com',
     'collector.kolhapur@maharashtra.gov.in'
   ];
   
-  const ccEmails = ['ms-ntca@nic.in'];
-  
   const emailData = {
     en: {
       label: 'English Appeal',
-      subject: 'Formal Objection against Granting Environmental and Forest Clearances for 3 Bauxite Mining Projects in Shahuwadi, Kolhapur',
-      body: (name: string) => `To: 1. The Chairperson/Secretary, SEIAA (State Level Environmental Impact Assessment Authority), Mumbai.
-2. The Principal Chief Conservator of Forests (Wildlife), Maharashtra State, Nagpur.
-3. The District Collector, Kolhapur.
-4. The Divisional Forest Officer, Kolhapur.
+      subject: 'Objection: Illegal Bauxite Mining Clearances in Sahyadri Tiger Corridor - Shahuwadi, Kolhapur',
+      body: (name: string, location: string) => `To: 
+1. The Chairperson, SEIAA & SEAC-1, Maharashtra.
+2. The Member Secretary, National Tiger Conservation Authority (NTCA), New Delhi.
+3. The Principal Chief Conservator of Forests (Wildlife), Maharashtra.
+4. The Secretary, MoEFCC, Regional Office, Nagpur.
+5. The District Collector & DCF, Kolhapur.
 
-Subject: Formal Objection against Granting Environmental and Forest Clearances for 3 Bauxite Mining Projects in Shahuwadi, Kolhapur.
+Subject: Formal Objection Against Environmental/Forest Clearances for 3 Bauxite Mining Projects in Shahuwadi, Kolhapur (Tiger Corridor Zone).
 
 Respected Sir/Madam,
 
-I am writing to you on behalf of the Sahyadri Bachav Sanghatana to register a formal and urgent objection against the proposed bauxite mining projects in Parali, Ghungur Block-I, and Ghungur Block-II in Shahuwadi Taluka, Kolhapur.
-
-Granting clearances to these projects would constitute a direct violation of environmental laws and mineral concession rules. Our objections are based on the following critical points:
+I am writing to register an urgent formal objection against the proposed bauxite mining projects in Shahuwadi Taluka, Kolhapur. These projects are legally untenable and ecologically destructive.
 
 1. Violation of Mineral Concession Rules (Expired LoIs):
-A mining project loses its legal standing once the Letter of Intent (LoI) expires. As per official records, the LoIs for all three projects have already lapsed:
-- Parali Bauxite Block (Shree Malhar Minerals): LoI expired on 13/09/2023.
-- Ghungur Bauxite Block-I (Shree Bhairavnath Earth Movers & Co.): LoI expired on 12/09/2025.
-- Ghungur Bauxite Block-II (Shri Jugai Minerals): LoI expired on 12/09/2024.
-Proceeding with any administrative clearance based on expired documents is legally untenable and constitutes a procedural lapse.
+The following blocks are proceeding despite having EXPIRED Letters of Intent (LoI):
+- Perli Bauxite Block (SIA/MH/MIN/557966/2025): LoI Expired on 13/09/2023.
+- Ghungur Block-I (SIA/MH/MIN/544562/2025): LoI Expired on 12/09/2025.
+- Ghungur Block-II (SIA/MH/MIN/545254/2025): LoI Expired on 12/09/2024.
+As per Rule 10 of MCR 2016, a project loses legal standing once the LoI expires. Granting EC/FC based on lapsed documents is a procedural illegality.
 
-2. Threat to the Sahyadri Tiger Reserve Corridor:
-These project sites are located within a vital North-South Tiger Corridor connecting the Sahyadri Tiger Reserve to the forests of the Southern Western Ghats. The draft Tiger Conservation Plan (TCP) identifies these villages as essential movement paths for tigers and other Schedule-I species. We are aware of recent attempts to exclude these villages from the TCP to facilitate mining, which violates the Wildlife Protection Act.
+2. Destruction of Sahyadri Tiger Reserve Corridor:
+The mining sites fall directly within the critical North-South Tiger Corridor linking Sahyadri Tiger Reserve to the Southern Western Ghats. Any mining here will permanently sever this corridor, violating the Wildlife (Protection) Act, 1972 and the direct oversight of the NTCA.
 
 3. Proximity to Eco-Sensitive Area (ESA):
-Specifically, the Parali project is located a mere 0.2 km from the Western Ghats ESA boundary. Mining activities in such a sensitive buffer zone will lead to depletion of water tables and permanent loss of endemic biodiversity.
-
-4. Non-Compliance with Public Hearing Protocols:
-The Project Proponents have failed to provide point-wise written replies to grievances raised during public hearings, which is a mandatory requirement for Environmental Clearance.
+Specifically, the Perli block is within 0.2 km of the Western Ghats ESA boundary. Mining in this buffer zone will deplete local water tables and destroy endemic biodiversity essential for the survival of the Tiger and Great Indian Hornbill.
 
 Our Demand:
-- Reject all pending Forest and Environmental Clearance applications for these three blocks.
-- Ensure no villages are excluded from the Tiger Conservation Plan.
-- Halt any unauthorized surveys in these forest areas.
+- Immediately reject the EC/FC proposals for Perli, Ghungur-I, and Ghungur-II.
+- Halt all illegal surveys and forest clearing in Shahuwadi.
+- Ensure the sanctity of the Tiger Conservation Plan (TCP).
 
 Sincerely,
 ${name || '[Your Name]'}
-Representative, Sahyadri Bachav Sanghatana
-Shahuwadi, Kolhapur.`,
+Citizen & Representative, Sahyadri Bachav Sanghatana
+${location || 'Shahuwadi, Kolhapur'}.`,
     },
     mr: {
       label: 'मराठी अपील',
-      subject: 'शाहूवाडी तालुक्यातील ३ प्रस्तावित बॉक्साईट खाण प्रकल्पांना वन आणि पर्यावरण मंजुरी नाकारण्याबाबत आणि तातडीने बंदी घालण्याबाबत',
-      body: (name: string) => `प्रति,
-१. अध्यक्ष/सचिव, SEIAA (State Level Environmental Impact Assessment Authority), मुंबई.
-२. प्रधान मुख्य वनसंरक्षक (वन्यजीव), महाराष्ट्र राज्य, नागपूर.
-३. जिल्हाधिकारी, कोल्हापूर.
-४. विभागीय वन अधिकारी, कोल्हापूर.
+      subject: 'तात्काळ आक्षेप: सह्याद्री व्याघ्र कॉरिडॉरमधील (शाहूवाडी) ३ बेकायदेशीर बॉक्साईड खाण प्रकल्पांना पर्यावरण मंजुरी नाकारण्याबाबत',
+      body: (name: string, location: string) => `प्रति,
+१. अध्यक्ष/सचिव, SEIAA व SEAC-1, महाराष्ट्र राज्य.
+२. सदस्य सचिव, राष्ट्रीय व्याघ्र संवर्धन प्राधिकरण (NTCA), नवी दिल्ली.
+३. प्रधान मुख्य वनसंरक्षक (वन्यजीव), महाराष्ट्र राज्य, नागपूर.
+४. प्रादेशिक अधिकारी, पर्यावरण व वन मंत्रालय (MoEFCC), नागपूर.
+५. जिल्हाधिकारी व उपवनसंरक्षक, कोल्हापूर.
 
-विषय: शाहूवाडी तालुक्यातील ३ प्रस्तावित बॉक्साईट खाण प्रकल्पांना वन आणि पर्यावरण मंजुरी नाकारण्याबाबत आणि तातडीने बंदी घालण्याबाबत.
+विषय: शाहूवाडी तालुक्यातील ३ प्रस्तावित बेकायदेशीर बॉक्साईट खाण प्रकल्पांना (परळी, घुंगुर) पर्यावरण आणि वन मंजुरी नाकारण्याबाबत फॉर्मल आक्षेप.
 
 महोदय,
 
-मी शाहूवाडी (कोल्हापूर) येथील निसर्गप्रेमी नागरिक आणि सह्याद्री बचाव मोहिमेचा प्रतिनिधी, या पत्राद्वारे शाहूवाडी तालुक्यातील परळी, घुंगुर ब्लॉक-१ आणि घुंगुर ब्लॉक-२ या तीन बॉक्साईट खाण प्रकल्पांबाबत गंभीर कायदेशीर आक्षेप नोंदवत आहे.
+मी शाहूवाडी (कोल्हापूर) येथील सजग नागरिक आणि सह्याद्री बचाव मोहिमेचा प्रतिनिधी या पत्राद्वारे शाहूवाडी तालुक्यातील परळी, घुंगुर ब्लॉक-१ आणि घुंगुर ब्लॉक-२ या तीन खाण प्रकल्पांबाबत तीव्र आक्षेप नोंदवत आहे. हे प्रकल्प कायदेशीररीत्या अवैध आणि पर्यावरणीयदृष्ट्या विनाशकारी आहेत.
 
-या प्रकल्पांना मंजुरी देणे म्हणजे कायद्याचे आणि पर्यावरणाचे उघड उल्लंघन ठरेल. त्याबाबतचे सविस्तर मुद्दे खालीलप्रमाणे आहेत:
+१. खनिज सवलत नियमांचे उल्लंघन (कालबाह्य LoI):
+खालील प्रकल्पांचे 'लेटर ऑफ इंटेंट' (LoI) आधीच संपलेले आहेत:
+- परळी बॉक्साईट ब्लॉक (SIA/MH/MIN/557966/2025): १३/०९/२०२३ रोजी मुदत संपली.
+- घुंगुर ब्लॉक-१ (SIA/MH/MIN/544562/2025): १२/०९/२०२५ रोजी मुदत संपली.
+- घुंगुर ब्लॉक-२ (SIA/MH/MIN/545254/2025): १२/०९/२०२४ रोजी मुदत संपली.
+खनिज सवलत नियमांनुसार LoI संपल्यानंतर कोणतीही मंजुरी प्रक्रिया पुढे नेणे बेकायदेशीर आहे.
 
-१. प्रकल्पांचे मुदतबाह्य परवाने (Expired Letters of Intent - LoI):
-खनिज सवलत नियमांनुसार, एकदा LoI ची मुदत संपली की तो प्रकल्प कायदेशीररित्या अवैध ठरतो. या तिन्ही प्रकल्पांची स्थिती खालीलप्रमाणे आहे:
+२. सह्याद्री व्याघ्र कॉरिडॉरचा विनाश:
+हे प्रकल्प प्रस्तावित असलेला परिसर सह्याद्री व्याघ्र प्रकल्प आणि दक्षिण पश्चिम घाटांना जोडणारा मुख्य व्याघ्र मार्ग (Tiger Corridor) आहे. खाणकामामुळे हा संवेदनशील मार्ग कायमचा नष्ट होईल, जे वन्यजीव संरक्षण कायदा १९७२ चे थेट उल्लंघन ठरेल.
 
-परळी बॉक्साईट ब्लॉक (श्री मल्हार मिनरल्स): या प्रकल्पाचा LoI १३/०९/२०२३ रोजीच संपला आहे.
-घुंगुर बॉक्साईट ब्लॉक-१ (श्री भैरवनाथ अर्थ मूव्हर्स): याचा LoI १२/०९/२०२५ रोजी संपला आहे.
-घुंगुर बॉक्साईट ब्लॉक-२ (श्री जुगाई मिनरल्स): याचा LoI १२/०९/२०२४ रोजी संपला आहे.
-मुदतबाह्य कागदपत्रांच्या आधारे कोणतीही प्रशासकीय प्रक्रिया पुढे नेणे हे बेकायदेशीर आहे.
-
-२. सह्याद्री व्याघ्र प्रकल्प आणि व्याघ्र भ्रमणमार्ग (Tiger Corridor):
-हे तिन्ही प्रकल्प सह्याद्री व्याघ्र प्रकल्पाच्या (STR) अत्यंत महत्त्वाच्या भ्रमणमार्गात येतात. नॅशनल टायगर कन्झर्वेशन अथॉरिटी (NTCA) कडे सादर केलेल्या व्याघ्र संवर्धन योजनेत (TCP) या गावांचा स्पष्ट उल्लेख 'कॉरिडॉर' म्हणून आहे.
-
-३. पश्चिम घाट संवेदनशील क्षेत्र (ESA) उल्लंघन:
-परळी आणि घुंगुर हे दोन्ही भाग पश्चिम घाटातील 'Ecologically Sensitive Area' (ESA) मध्ये येतात. परळी खाण प्रकल्प हा ESA सीमेपासून केवळ ०.२ किमी अंतरावर आहे.
-
-४. जनसुनावणीतील त्रुटी (Public Hearing Non-Compliance):
-या प्रकल्पांच्या जनसुनावणी दरम्यान स्थानिक ग्रामस्थांनी उपस्थित केलेल्या महत्त्वाच्या मुद्द्यांना आणि आक्षेपांना प्रकल्प प्रवर्तकांनी अद्याप समाधानकारक लेखी उत्तरे दिलेली नाहीत.
+३. पर्यावरण संवेदनशील क्षेत्राची (ESA) जवळीक:
+परळी प्रकल्पाचा परिसर पश्चिम घाट ESA च्या फक्त ०.२ किमी अंतरावर आहे. अशा संवेदनशील क्षेत्रात खाणकाम केल्यास भूजल पातळी घटून येथील अमूल्य जैवविविधता नष्ट होईल.
 
 आमची मागणी:
-वरील कायदेशीर आणि पर्यावरणीय वस्तुस्थिती लक्षात घेऊन, या तिन्ही प्रकल्पांची वन आणि पर्यावरण मंजुरी प्रक्रिया तात्काळ थांबवण्यात यावी आणि त्यांचे खाण परवाने कायमस्वरूपी रद्द करण्यात यावेत.
+- परळी, घुंगुर-१ आणि घुंगुर-२ या तिन्ही प्रकल्पांचे EC/FC प्रस्ताव तातडीने फेटाळण्यात यावेत.
+- शाहूवाडीतील जंगलातील बेकायदेशीर सर्वेक्षण आणि झाडे तोडणे थांबवावे.
+- व्याघ्र संवर्धन आराखड्याचे (TCP) काटेकोरपणे पालन व्हावे.
 
 आपला नम्र,
 ${name || '[तुमचे नाव]'}
-सह्याद्री बचाव संघटना / प्रतिनिधी
-शाहूवाडी, कोल्हापूर.`,
+नागरिक व प्रतिनिधी, सह्याद्री बचाव संघटना
+${location || 'शाहूवाडी, कोल्हापूर'}.`,
     }
   };
 
@@ -375,22 +496,60 @@ ${name || '[तुमचे नाव]'}
   };
 
   const currentEmailData = emailData[activeTab];
-  const finalBody = currentEmailData.body(userName);
+  const finalBody = currentEmailData.body(userName, userLocation);
   
   const recipientsStr = recipients.map(r => r.trim()).join(',');
-  const ccStr = ccEmails.join(',');
   const encodedSubject = encodeURIComponent(currentEmailData.subject);
   const encodedBody = encodeURIComponent(finalBody.replace(/\n/g, '\r\n'));
-  const mailtoUrl = `mailto:${recipientsStr}?cc=${ccStr}&subject=${encodedSubject}&body=${encodedBody}`;
+  const mailtoUrl = `mailto:${recipientsStr}?subject=${encodedSubject}&body=${encodedBody}`;
 
   const handleSendAction = (e: React.MouseEvent) => {
     e.preventDefault();
     setShowConfirmModal(true);
   };
 
+  const validateFields = () => {
+    let isValid = true;
+    setSubmitError('');
+    
+    // Support English, Marathi (Devanagari), spaces, periods, hyphens, ticks
+    const nameRegex = /^[\p{L}\s.\-']+$/u;
+    // Support above + numbers and commas for location
+    const locRegex = /^[\p{L}\d\s,.\-']+$/u;
+
+    if (!userName.trim()) {
+      setNameError(selectedLanguage === 'mr' ? 'अपील पाठवण्यासाठी कृपया तुमचे नाव लिहा.' : 'We need your name to sign the appeal.');
+      isValid = false;
+    } else if (userName.trim().length < 2) {
+      setNameError(selectedLanguage === 'mr' ? 'कृपया तुमचे पूर्ण नाव लिहा (किमान २ अक्षरे).' : 'Please enter your full name (at least 2 letters).');
+      isValid = false;
+    } else if (!nameRegex.test(userName.trim())) {
+      setNameError(selectedLanguage === 'mr' ? 'नावात फक्त अक्षरे आणि आवश्यक विरामचिन्हे असावीत.' : 'Please use only letters, spaces, or hyphens for your name.');
+      isValid = false;
+    } else {
+      setNameError('');
+    }
+
+    if (!userLocation.trim()) {
+      setLocationError(selectedLanguage === 'mr' ? 'शासनाला माहिती देण्यासाठी कृपया तुमचे गाव किंवा शहर लिहा.' : 'Please let officials know your village or city.');
+      isValid = false;
+    } else if (userLocation.trim().length < 2) {
+      setLocationError(selectedLanguage === 'mr' ? 'कृपया वैध ठिकाणाचे नाव लिहा (किमान २ अक्षरे).' : 'Please enter a valid location (at least 2 characters).');
+      isValid = false;
+    } else if (!locRegex.test(userLocation.trim())) {
+      setLocationError(selectedLanguage === 'mr' ? 'स्थानाच्या नावात फक्त अक्षरे आणि क्रमांक असू शकतात.' : 'Please use only letters, numbers, spaces, and commas.');
+      isValid = false;
+    } else {
+      setLocationError('');
+    }
+
+    return isValid;
+  };
+
   const confirmAndSend = async () => {
-    if (!userName.trim()) return;
+    if (!validateFields()) return;
     setIsSending(true);
+    setSubmitError('');
 
     try {
       const batch = writeBatch(db);
@@ -404,7 +563,8 @@ ${name || '[तुमचे नाव]'}
       const subRef = doc(collection(db, 'submissions'));
       batch.set(subRef, {
         timestamp: serverTimestamp(),
-        language: activeTab
+        language: activeTab,
+        location: userLocation
       });
 
       await batch.commit();
@@ -416,10 +576,23 @@ ${name || '[तुमचे नाव]'}
         window.location.href = mailtoUrl;
       }, 800);
 
-    } catch (error) {
+    } catch (error: any) {
       handleFirestoreError(error, 'confirmAndSend');
-      window.location.href = mailtoUrl;
-      setShowConfirmModal(false);
+      let defaultMsg = selectedLanguage === 'mr' 
+        ? 'डेटाबेसशी संपर्क होऊ शकला नाही. परंतु तुम्ही तरीही तुमचा ईमेल तयार करण्यासाठी खालील बटण वापरू शकता.' 
+        : 'There was an issue connecting to our servers. However, you can still proceed to generate your email.';
+      
+      if (error?.message?.includes('permission-denied') || error?.code === 'permission-denied') {
+        defaultMsg = selectedLanguage === 'mr' 
+          ? 'सुरक्षा त्रुटी: तुम्हाला ही कारवाई करण्याची परवानगी नाही. कृपया पुन्हा प्रयत्न करा.' 
+          : 'Security error: You do not have permission to perform this action. Please refresh the page and try again.';
+      } else if (error?.message?.includes('offline') || error?.code === 'unavailable') {
+        defaultMsg = selectedLanguage === 'mr' 
+          ? 'तुमचे इंटरनेट कनेक्शन खंडित झाले आहे. तुमची माहिती ऑफलाइन सेव्ह केली आहे, तुम्ही ईमेल पाठवू शकता.' 
+          : 'You seem to be offline. Your support is saved locally, and you can still proceed to your email app.';
+      }
+      
+      setSubmitError(defaultMsg);
     } finally {
       setIsSending(false);
     }
@@ -427,8 +600,16 @@ ${name || '[तुमचे नाव]'}
 
   return (
     <div className="min-h-screen bg-[#f9f7f2] font-sans text-gray-900 selection:bg-[#c08b5c]/30">
-      <AnimatePresence>
-        {!selectedLanguage && (
+      <AnimatePresence mode="wait">
+        {activeView === 'main' ? (
+          <motion.div
+            key="main"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <AnimatePresence>
+              {!selectedLanguage && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -460,6 +641,52 @@ ${name || '[तुमचे नाव]'}
                 </button>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* External Link Modal */}
+      <AnimatePresence>
+        {showExternalModal && l && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[400] flex items-center justify-center p-4 sm:p-6 bg-[#0a1f11]/90 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="bg-white rounded-[32px] p-6 sm:p-10 max-w-sm w-full shadow-2xl relative overflow-hidden text-center z-[401]"
+            >
+              <div className="w-16 h-16 bg-[#c08b5c]/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ExternalLink className="w-8 h-8 text-[#c08b5c]" />
+              </div>
+              <h3 className="text-2xl font-serif font-black text-[#0a1f11] mb-3">{l.gallery.externalModal.title}</h3>
+              <p className="text-gray-500 mb-8 text-sm leading-relaxed">
+                {l.gallery.externalModal.body}
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <a 
+                  href={pendingExternalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setShowExternalModal(false)}
+                  className="w-full py-4 bg-[#c08b5c] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#a67448] transition-all shadow-lg flex items-center justify-center gap-2"
+                >
+                  {l.gallery.externalModal.continue} <ExternalLink className="w-3 h-3" />
+                </a>
+                <button 
+                  onClick={() => setShowExternalModal(false)}
+                  className="w-full py-4 bg-gray-100 text-gray-500 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-gray-200 transition-all block"
+                >
+                  {l.gallery.externalModal.cancel}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -501,25 +728,60 @@ ${name || '[तुमचे नाव]'}
                     </p>
                     
                     <div className="space-y-6">
+                      {submitError && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium text-left border border-red-100 flex items-start gap-3">
+                          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                          <p>{submitError}</p>
+                        </motion.div>
+                      )}
+                      
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.modal?.label}</label>
                         <input 
                           type="text" 
                           value={userName}
-                          onChange={(e) => setUserName(e.target.value)}
+                          onChange={(e) => {
+                            setUserName(e.target.value);
+                            if (nameError) setNameError('');
+                          }}
                           placeholder={l?.modal?.placeholder}
                           autoFocus
                           disabled={isSending}
-                          className="w-full px-6 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:border-[#c08b5c] focus:ring-4 focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11] disabled:opacity-50"
+                          className={`w-full px-6 py-4 bg-[#f9f7f2] border rounded-xl focus:outline-none focus:ring-4 transition-all font-bold text-[#0a1f11] disabled:opacity-50 ${nameError ? 'border-red-400 focus:border-red-500 focus:ring-red-400/10' : 'border-gray-200 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10'}`}
                         />
+                        {nameError && (
+                          <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-red-500 text-xs font-bold mt-2 text-left">
+                            {nameError}
+                          </motion.p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.modal?.locationLabel}</label>
+                        <input 
+                          type="text" 
+                          value={userLocation}
+                          onChange={(e) => {
+                            setUserLocation(e.target.value);
+                            if (locationError) setLocationError('');
+                          }}
+                          placeholder={l?.modal?.locationPlaceholder}
+                          disabled={isSending}
+                          className={`w-full px-6 py-4 bg-[#f9f7f2] border rounded-xl focus:outline-none focus:ring-4 transition-all font-bold text-[#0a1f11] disabled:opacity-50 ${locationError ? 'border-red-400 focus:border-red-500 focus:ring-red-400/10' : 'border-gray-200 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10'}`}
+                        />
+                        {locationError && (
+                          <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-red-500 text-xs font-bold mt-2 text-left">
+                            {locationError}
+                          </motion.p>
+                        )}
                       </div>
                       
                       <div className="flex flex-col sm:flex-row gap-4 pt-4">
                         <motion.button 
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={confirmAndSend}
-                          disabled={!userName.trim() || isSending}
+                          onClick={submitError ? () => { window.location.href = mailtoUrl; setShowConfirmModal(false); } : confirmAndSend}
+                          disabled={!userName.trim() || !userLocation.trim() || isSending}
                           className="flex-1 py-4 bg-[#1b4332] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#0a1f11] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#1b4332]/20 flex items-center justify-center gap-3"
                         >
                           {isSending ? (
@@ -531,13 +793,13 @@ ${name || '[तुमचे नाव]'}
                               />
                               {l?.modal?.sending}
                             </>
-                          ) : l?.modal?.confirm}
+                          ) : submitError ? (selectedLanguage === 'mr' ? 'तरीही ईमेल पाठवा' : 'Send Email Anyway') : l?.modal?.confirm}
                         </motion.button>
                         {!isSending && (
                           <motion.button 
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            onClick={() => setShowConfirmModal(false)}
+                            onClick={() => { setShowConfirmModal(false); setSubmitError(''); }}
                             className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-gray-200 transition-all"
                           >
                             {l?.modal?.cancel}
@@ -585,30 +847,41 @@ ${name || '[तुमचे नाव]'}
       </AnimatePresence>
 
       {/* Browser Environment Alert */}
-      <div className="bg-[#c08b5c]/10 text-[#0a1f11] text-[9px] sm:text-[10px] py-2.5 px-6 text-center font-black uppercase tracking-[0.2em] relative z-50 border-b border-[#c08b5c]/10 mt-[65px] sm:mt-[72px]">
+      <div className="bg-[#c08b5c]/10 text-[#0a1f11] text-[9px] sm:text-[10px] py-2.5 px-6 text-center font-black uppercase tracking-[0.2em] relative z-50 mt-[76px] sm:mt-[88px] mx-4 sm:mx-auto max-w-5xl rounded-full">
         Best experienced by clicking "Open in new window" ↗
       </div>
       
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#0a1f11]/95 border-b border-white/5 py-4 px-6 sm:px-8 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-[#c08b5c] rounded">
-              <TreePine className="text-[#0a1f11] w-5 h-5 sm:w-4 sm:h-4" />
+      <div className="fixed top-0 left-0 right-0 z-[100] px-4 pt-4 sm:pt-6 pointer-events-none">
+        <nav className="max-w-5xl mx-auto pointer-events-auto flex justify-between items-center bg-[#0a1f11]/80 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full py-2.5 px-3 sm:px-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <div className="flex items-center gap-2 sm:gap-6">
+            <div className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+              <div className="p-1.5 sm:p-2 bg-[#c08b5c] rounded-lg sm:rounded-full">
+                <TreePine className="text-[#0a1f11] w-4 h-4 sm:w-4 sm:h-4" />
+              </div>
+              <span className="font-serif font-black text-white tracking-tight sm:text-xl hidden sm:block">
+                Sahyadri Bachav
+              </span>
             </div>
-            <span className="font-serif font-black text-white tracking-tight text-lg sm:text-xl">
-              Sahyadri Bachav
-            </span>
+            
+            <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
+
+            <button 
+              onClick={() => { setActiveView('investigation'); window.scrollTo(0,0); }}
+              className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all"
+            >
+              {l?.nav?.nexus}
+            </button>
           </div>
 
           <button 
             onClick={() => setSelectedLanguage(selectedLanguage === 'en' ? 'mr' : 'en')}
-            className="px-4 py-2 border border-white/20 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#c08b5c] hover:bg-white/10 transition-all flex items-center gap-2 bg-white/5"
+            className="px-4 py-2 border border-white/10 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#c08b5c] hover:bg-white/10 transition-all flex items-center gap-2 bg-white/5 whitespace-nowrap shadow-sm"
           >
             {selectedLanguage === 'en' ? 'मराठी' : 'English'}
           </button>
-        </div>
-      </nav>
+        </nav>
+      </div>
 
       {/* Hero Section */}
       <section className="relative min-h-[100svh] flex items-center pt-10 overflow-hidden bg-[#0a1f11]">
@@ -629,22 +902,45 @@ ${name || '[तुमचे नाव]'}
               </h1>
 
               {/* Momentum Counter */}
-              <div className="flex flex-col items-center mb-10 sm:mb-14">
-                <div className="px-6 py-3 bg-[#c08b5c]/10 border border-[#c08b5c]/20 rounded-2xl flex items-center gap-4">
-                  <div className="flex -space-x-2">
-                    {[1,2,3].map(i => (
-                      <div key={i} className="w-8 h-8 rounded-full border-2 border-[#0a1f11] overflow-hidden">
-                        <img src={`https://picsum.photos/seed/person${i}/100/100`} alt="Supporter" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      </div>
-                    ))}
+              <div className="flex flex-col items-center mb-10 sm:mb-14 w-full">
+                <div className="px-6 py-6 bg-[#c08b5c]/10 border border-[#c08b5c]/20 rounded-3xl flex flex-col items-center gap-4 w-full max-w-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="flex -space-x-2">
+                      {[1,2,3].map(i => (
+                        <div key={i} className="w-10 h-10 rounded-full border-2 border-[#0a1f11] overflow-hidden relative z-10">
+                          <img src={`https://picsum.photos/seed/person${i}/100/100`} alt="Supporter" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-left">
+                      <span className="block text-[#c08b5c] font-black text-2xl leading-none">
+                        {sendCount.toLocaleString()}
+                      </span>
+                      <span className="block text-white/40 text-[10px] uppercase tracking-widest font-bold mt-1">
+                        {l?.impact?.label}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <span className="block text-[#c08b5c] font-black text-xl leading-none">
-                      {sendCount.toLocaleString()}
-                    </span>
-                    <span className="block text-white/40 text-[10px] uppercase tracking-widest font-bold">
-                      {l?.impact?.label}
-                    </span>
+
+                  {/* Animated Bar Chart */}
+                  <div className="w-full h-[140px] mt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
+                        <Tooltip 
+                          cursor={{fill: 'rgba(255,255,255,0.02)'}} 
+                          contentStyle={{ backgroundColor: '#0a1f11', border: '1px solid rgba(192,139,92,0.3)', borderRadius: '12px', fontSize: '12px' }}
+                          itemStyle={{ color: '#c08b5c', fontWeight: 'bold' }}
+                          labelStyle={{ color: 'rgba(255,255,255,0.5)', fontWeight: 'bold', marginBottom: '4px' }}
+                        />
+                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+                        <Bar dataKey="appeals" radius={[4, 4, 0, 0]} isAnimationActive={true}>
+                          <LabelList dataKey="appeals" position="top" fill="rgba(255,255,255,0.7)" fontSize={11} fontWeight="black" offset={8} />
+                          { chartData.map((entry, index) => (
+                             <Cell key={`cell-${index}`} fill={index === 3 ? '#c08b5c' : '#c08b5c55'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               </div>
@@ -826,8 +1122,11 @@ ${name || '[तुमचे नाव]'}
                   
                   <a 
                     href={block.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPendingExternalUrl(block.url);
+                      setShowExternalModal(true);
+                    }}
                     className="flex items-center justify-center gap-2 px-6 py-4 bg-white border border-gray-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#0a1f11] hover:bg-[#0a1f11] hover:text-white transition-all shadow-sm"
                   >
                     {l?.gallery?.view} <ExternalLink className="w-3 h-3" />
@@ -1014,51 +1313,6 @@ ${name || '[तुमचे नाव]'}
                     </div>
                   </div>
 
-                  {/* CC Field */}
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c08b5c]">{l?.fallback?.cc}</label>
-                      <button 
-                        onClick={() => copyToClipboard(ccEmails.join(','), 'cc')}
-                        className={`w-full sm:w-auto min-w-[120px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-[10px] font-bold transition-all overflow-hidden ${
-                          copiedField === 'cc' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-[#0a1f11]/5 text-[#0a1f11] hover:bg-[#0a1f11]/10'
-                        }`}
-                      >
-                        <AnimatePresence mode="wait">
-                          {copiedField === 'cc' ? (
-                            <motion.span
-                              key="copied"
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              className="flex items-center gap-2"
-                            >
-                              <Check className="w-3 h-3" /> {l?.fallback?.copied}
-                            </motion.span>
-                          ) : (
-                            <motion.span
-                              key="copy"
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              className="flex items-center gap-2"
-                            >
-                              <Copy className="w-3 h-3" /> {l?.fallback?.copyCC}
-                            </motion.span>
-                          )}
-                        </AnimatePresence>
-                      </button>
-                    </div>
-                    <div 
-                      onClick={() => copyToClipboard(ccEmails.join(','), 'cc')}
-                      className="text-[10px] sm:text-[11px] font-mono p-4 bg-white border-2 border-dashed border-gray-100 rounded-2xl text-gray-500 break-all leading-relaxed shadow-sm cursor-pointer hover:border-[#c08b5c]/30 hover:bg-[#f9f7f2]/30 transition-all group/field"
-                    >
-                      <span className="group-hover/field:text-[#0a1f11] transition-colors">{ccEmails.join(', ')}</span>
-                    </div>
-                  </div>
-
                   {/* Subject Field */}
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -1174,11 +1428,97 @@ ${name || '[तुमचे नाव]'}
           </div>
           
           <div className="text-right space-y-4">
+            <button 
+              onClick={() => { setActiveView('investigation'); window.scrollTo(0,0); }}
+              className="block w-full text-right text-white/60 font-black text-[10px] uppercase tracking-widest hover:text-[#c08b5c] transition-colors mb-2"
+            >
+              {l?.nav?.nexus}
+            </button>
             <a href="#" className="block text-[#c08b5c] font-black text-xs uppercase tracking-widest hover:text-white transition-colors">{l?.footer?.top}</a>
             <p className="text-[10px] text-white/20 uppercase tracking-[0.5em]">Kolhapur, India © 2026</p>
           </div>
         </div>
       </footer>
+        </motion.div>
+      ) : (
+          <motion.div
+            key="investigation"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="min-h-screen bg-[#fcfcfc] pb-24"
+          >
+            <nav className="sticky top-0 z-[100] bg-white border-b border-gray-100 px-6 py-6 font-sans">
+              <div className="max-w-5xl mx-auto flex items-center justify-between">
+                <button 
+                  onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all"
+                >
+                  ← {l?.investigation?.back || 'Back'}
+                </button>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-[#1b4332] rounded flex items-center justify-center">
+                    <Leaf className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="font-serif font-black text-sm text-[#0a1f11]">Investigation Board</span>
+                </div>
+              </div>
+            </nav>
+
+            <div className="max-w-5xl mx-auto px-6 pt-24 space-y-24">
+              <div className="space-y-6 text-center max-w-3xl mx-auto">
+                <span className="text-[10px] font-black uppercase tracking-[0.6em] text-[#c08b5c]">Investigative Report</span>
+                <h1 className="text-5xl sm:text-7xl font-serif font-black text-[#0a1f11] leading-tight">{l?.investigation?.title}</h1>
+                <p className="text-xl text-gray-500 font-light leading-relaxed">
+                  {l?.investigation?.subtitle}
+                </p>
+              </div>
+
+              <div className="grid gap-8">
+                {l?.investigation?.sections?.map((section: any, idx: number) => (
+                  <motion.div 
+                    key={idx}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.1 }}
+                    className="group bg-white border border-gray-100 p-10 sm:p-16 rounded-[4rem] shadow-[0_30px_80px_rgba(0,0,0,0.02)] hover:shadow-[0_40px_100px_rgba(0,0,0,0.04)] transition-all"
+                  >
+                    <div className="flex flex-col sm:flex-row gap-12 items-start">
+                      <div className="w-16 h-16 bg-[#f9f7f2] rounded-3xl flex items-center justify-center flex-shrink-0 group-hover:bg-[#c08b5c] transition-all">
+                        <span className="text-xl font-serif font-black text-[#c08b5c] group-hover:text-white">0{idx + 1}</span>
+                      </div>
+                      <div className="space-y-8">
+                        <h3 className="text-3xl sm:text-4xl font-serif font-black text-[#0a1f11] leading-tight">{section.title}</h3>
+                        <p className="text-lg text-gray-500 leading-relaxed font-light first-letter:text-4xl first-letter:font-serif first-letter:font-black first-letter:text-[#c08b5c] first-letter:mr-2">
+                          {section.body}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="p-12 bg-[#0a1f11] rounded-[4rem] text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-12 opacity-10">
+                  <AlertTriangle className="w-48 h-48" />
+                </div>
+                <div className="relative z-10 space-y-6 max-w-xl">
+                  <h4 className="text-3xl font-serif font-black">Call for Accountability</h4>
+                  <p className="text-gray-400 font-light leading-relaxed">
+                    We urge the Ministry of Environment, Forest and Climate Change (MoEFCC) and the NBWL to investigate these artificial boundary shifts designed to favor mining proponents over protected species.
+                  </p>
+                  <button 
+                    onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                    className="px-8 py-4 bg-white text-[#0a1f11] rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-[#c08b5c] hover:text-white transition-all shadow-xl shadow-black/20"
+                  >
+                    Join the Resistance
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

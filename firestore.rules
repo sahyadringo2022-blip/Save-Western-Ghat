@@ -48,7 +48,7 @@ service cloud.firestore {
       }
 
       allow create: if isValidSubmission(incoming());
-      allow read: if false; // Logs stay private
+      allow read: if true; // Allow reading collection for historical data charting
     }
   }
 }
