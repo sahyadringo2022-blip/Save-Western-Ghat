@@ -511,20 +511,12 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
   const validateFields = () => {
     let isValid = true;
     setSubmitError('');
-    
-    // Support English, Marathi (Devanagari), spaces, periods, hyphens, ticks
-    const nameRegex = /^[\p{L}\s.\-']+$/u;
-    // Support above + numbers and commas for location
-    const locRegex = /^[\p{L}\d\s,.\-']+$/u;
 
     if (!userName.trim()) {
       setNameError(selectedLanguage === 'mr' ? 'अपील पाठवण्यासाठी कृपया तुमचे नाव लिहा.' : 'We need your name to sign the appeal.');
       isValid = false;
     } else if (userName.trim().length < 2) {
       setNameError(selectedLanguage === 'mr' ? 'कृपया तुमचे पूर्ण नाव लिहा (किमान २ अक्षरे).' : 'Please enter your full name (at least 2 letters).');
-      isValid = false;
-    } else if (!nameRegex.test(userName.trim())) {
-      setNameError(selectedLanguage === 'mr' ? 'नावात फक्त अक्षरे आणि आवश्यक विरामचिन्हे असावीत.' : 'Please use only letters, spaces, or hyphens for your name.');
       isValid = false;
     } else {
       setNameError('');
@@ -535,9 +527,6 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       isValid = false;
     } else if (userLocation.trim().length < 2) {
       setLocationError(selectedLanguage === 'mr' ? 'कृपया वैध ठिकाणाचे नाव लिहा (किमान २ अक्षरे).' : 'Please enter a valid location (at least 2 characters).');
-      isValid = false;
-    } else if (!locRegex.test(userLocation.trim())) {
-      setLocationError(selectedLanguage === 'mr' ? 'स्थानाच्या नावात फक्त अक्षरे आणि क्रमांक असू शकतात.' : 'Please use only letters, numbers, spaces, and commas.');
       isValid = false;
     } else {
       setLocationError('');
