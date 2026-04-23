@@ -41,10 +41,12 @@ service cloud.firestore {
     // Security Rules for Submissions (Logs)
     match /submissions/{submissionId} {
       function isValidSubmission(data) {
-        return data.keys().hasAll(['timestamp', 'language']) &&
-               data.keys().size() == 2 &&
+        return data.keys().hasAll(['timestamp', 'language', 'location']) &&
+               data.keys().size() == 3 &&
                data.timestamp == request.time &&
-               data.language in ['en', 'mr'];
+               data.language in ['en', 'mr'] &&
+               data.location is string &&
+               data.location.size() <= 200;
       }
 
       allow create: if isValidSubmission(incoming());
