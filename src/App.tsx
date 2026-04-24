@@ -44,8 +44,9 @@ const db = initializeFirestore(app, {
 }, (firebaseConfig as any).firestoreDatabaseId);
 
 export default function App() {
+  const isStandaloneLegal = window.location.hostname.startsWith('legal.') || window.location.pathname.includes('/legal');
   const [activeView, setActiveView] = useState<'main' | 'investigation' | 'legal'>(
-    (window.location.hostname.startsWith('legal.') || window.location.pathname.includes('/legal')) ? 'legal' : 'main'
+    isStandaloneLegal ? 'legal' : 'main'
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'mr' | null>(null);
@@ -1020,189 +1021,50 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
         )}
       </AnimatePresence>
 
-      {/* Download Modal */}
-      <AnimatePresence>
-        {showDownloadModal && l?.legal && downloadingDoc && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 bg-[#0a1f11]/90 backdrop-blur-md"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.9, y: 20, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="bg-white rounded-[32px] p-6 sm:p-12 max-w-lg w-full shadow-2xl relative overflow-hidden z-[201]"
-            >
-              <button 
-                onClick={() => setShowDownloadModal(false)}
-                className="absolute top-4 right-4 sm:top-6 sm:right-6 p-3 text-gray-400 hover:text-[#0a1f11] hover:bg-gray-100 rounded-full transition-all z-20"
-              >
-                <X className="w-6 h-6 sm:w-5 sm:h-5" />
-              </button>
-
-              <div className="absolute top-0 right-0 p-8 opacity-5">
-                <ExternalLink className="w-24 h-24 text-[#0a1f11]" />
-              </div>
-              
-              <div className="relative z-10 text-center sm:text-left">
-                {!dlSuccess ? (
-                  <>
-                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-2">{l.legal.dlModal.title}</h3>
-                    <p className="text-[#c08b5c] font-black text-xs tracking-widest uppercase mb-4">{downloadingDoc.title}</p>
-                    <p className="text-gray-500 mb-8 leading-relaxed text-sm">
-                      {l.legal.dlModal.body}
-                    </p>
-                    
-                    <div className="space-y-5">
-                      {dlError && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium text-left border border-red-100 flex items-start gap-3">
-                          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                          <p>{dlError}</p>
-                        </motion.div>
-                      )}
-                      
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.nameLabel}</label>
-                        <input 
-                          type="text" 
-                          value={dlName}
-                          onChange={(e) => { setDlName(e.target.value); setDlError(''); }}
-                          autoFocus
-                          disabled={isSending}
-                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.emailLabel}</label>
-                        <input 
-                          type="email" 
-                          value={dlEmail}
-                          onChange={(e) => { setDlEmail(e.target.value); setDlError(''); }}
-                          placeholder={l.legal.dlModal.emailPlaceholder}
-                          disabled={isSending}
-                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.locLabel}</label>
-                        <input 
-                          type="text" 
-                          value={dlLocation}
-                          onChange={(e) => { setDlLocation(e.target.value); setDlError(''); }}
-                          disabled={isSending}
-                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
-                        />
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                        <motion.button 
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={handleDownloadSubmit}
-                          disabled={!dlName.trim() || !dlLocation.trim() || !dlEmail.trim() || isSending}
-                          className="flex-1 py-4 bg-[#1b4332] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#0a1f11] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-3"
-                        >
-                          {isSending ? (
-                            <>
-                              <motion.div 
-                                animate={{ rotate: 360 }}
-                                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
-                              />
-                              {l.modal.sending}
-                            </>
-                          ) : l.legal.dlModal.confirm}
-                        </motion.button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="py-6 text-center"
-                  >
-                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12 }}>
-                        <Check className="w-10 h-10 text-green-600" />
-                      </motion.div>
-                    </div>
-                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-4">{l.legal.dlModal.successTitle}</h3>
-                    <p className="text-gray-500 mb-8 leading-relaxed max-w-sm mx-auto text-sm">
-                      {l.legal.dlModal.successBody}
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      <a 
-                        href={`mailto:sahyadringo2022@gmail.com?subject=Legal Document Download (${downloadingDoc.title})&body=User Details:%0A- Name: ${dlName}%0A- Location: ${dlLocation}%0A- Email: ${dlEmail}%0A%0AThey have requested the official legal document.`}
-                        className="w-full py-4 bg-[#c08b5c] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#a67448] transition-all shadow-lg flex justify-center"
-                      >
-                        {l.legal.dlModal.adminNotifyFallback}
-                      </a>
-                      <button 
-                        onClick={() => {
-                          setShowDownloadModal(false);
-                          setTimeout(() => setDlSuccess(false), 500);
-                        }}
-                        className="w-full py-4 bg-gray-100 text-gray-500 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-gray-200 transition-all shadow-sm"
-                      >
-                        {l.modal.close}
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Browser Environment Alert */}
       <div className="bg-[#c08b5c]/10 text-[#0a1f11] text-[9px] sm:text-[10px] py-2.5 px-6 text-center font-black uppercase tracking-[0.2em] relative z-50 mt-[76px] sm:mt-[88px] mx-4 sm:mx-auto max-w-5xl rounded-full">
         Best experienced by clicking "Open in new window" ↗
       </div>
       
       {/* Navigation */}
-      <div className="fixed top-0 left-0 right-0 z-[100] px-4 pt-4 sm:pt-6 pointer-events-none">
-        <nav className="max-w-5xl mx-auto pointer-events-auto flex justify-between items-center bg-[#0a1f11]/80 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full py-2.5 px-3 sm:px-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <div className="flex items-center gap-2 sm:gap-6">
-            <div className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              <div className="p-1.5 sm:p-2 bg-[#c08b5c] rounded-lg sm:rounded-full">
-                <TreePine className="text-[#0a1f11] w-4 h-4 sm:w-4 sm:h-4" />
+      {!isStandaloneLegal && (
+        <div className="fixed top-0 left-0 right-0 z-[100] px-4 pt-4 sm:pt-6 pointer-events-none">
+          <nav className="max-w-5xl mx-auto pointer-events-auto flex justify-between items-center bg-[#0a1f11]/80 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full py-2.5 px-3 sm:px-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+            <div className="flex items-center gap-2 sm:gap-6">
+              <div className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                <div className="p-1.5 sm:p-2 bg-[#c08b5c] rounded-lg sm:rounded-full">
+                  <TreePine className="text-[#0a1f11] w-4 h-4 sm:w-4 sm:h-4" />
+                </div>
+                <span className="font-serif font-black text-white tracking-tight sm:text-xl hidden sm:block">
+                  Sahyadri Bachav
+                </span>
               </div>
-              <span className="font-serif font-black text-white tracking-tight sm:text-xl hidden sm:block">
-                Sahyadri Bachav
-              </span>
+              
+              <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
+
+              <button 
+                onClick={() => { setActiveView('legal'); window.scrollTo(0,0); }}
+                className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden sm:block"
+              >
+                {selectedLanguage === 'mr' ? 'कायदेशीर स्थिती' : 'Legal'}
+              </button>
+              <button 
+                onClick={() => { setActiveView('investigation'); window.scrollTo(0,0); }}
+                className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden sm:block"
+              >
+                {l?.nav?.nexus}
+              </button>
             </div>
-            
-            <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
 
             <button 
-              onClick={() => { setActiveView('legal'); window.scrollTo(0,0); }}
-              className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden sm:block"
+              onClick={() => setSelectedLanguage(selectedLanguage === 'en' ? 'mr' : 'en')}
+              className="px-4 py-2 border border-white/10 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#c08b5c] hover:bg-white/10 transition-all flex items-center gap-2 bg-white/5 whitespace-nowrap shadow-sm"
             >
-              {selectedLanguage === 'mr' ? 'कायदेशीर स्थिती' : 'Legal'}
+              {selectedLanguage === 'en' ? 'मराठी' : 'English'}
             </button>
-            <button 
-              onClick={() => { setActiveView('investigation'); window.scrollTo(0,0); }}
-              className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden sm:block"
-            >
-              {l?.nav?.nexus}
-            </button>
-          </div>
-
-          <button 
-            onClick={() => setSelectedLanguage(selectedLanguage === 'en' ? 'mr' : 'en')}
-            className="px-4 py-2 border border-white/10 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#c08b5c] hover:bg-white/10 transition-all flex items-center gap-2 bg-white/5 whitespace-nowrap shadow-sm"
-          >
-            {selectedLanguage === 'en' ? 'मराठी' : 'English'}
-          </button>
-        </nav>
-      </div>
+          </nav>
+        </div>
+      )}
 
       {/* Hero Section */}
       <section className="relative min-h-[100svh] flex items-center pt-10 overflow-hidden bg-[#0a1f11]">
@@ -1848,17 +1710,36 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           >
             <nav className="sticky top-0 z-[100] bg-white border-b border-gray-100 px-6 py-6 font-sans">
               <div className="max-w-5xl mx-auto flex items-center justify-between">
-                <button 
-                  onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
-                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all"
-                >
-                  ← {l?.legal?.back || 'Back'}
-                </button>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-[#c08b5c] rounded flex items-center justify-center">
-                    <Landmark className="w-4 h-4 text-white" />
+                {isStandaloneLegal ? (
+                  <a 
+                    href="https://savesahadri.in"
+                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all no-underline"
+                  >
+                    ← {l?.legal?.back || 'Back'}
+                  </a>
+                ) : (
+                  <button 
+                    onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all"
+                  >
+                    ← {l?.legal?.back || 'Back'}
+                  </button>
+                )}
+                <div className="flex items-center gap-4">
+                  {isStandaloneLegal && (
+                    <button 
+                      onClick={() => setSelectedLanguage(selectedLanguage === 'en' ? 'mr' : 'en')}
+                      className="px-3 py-1 border border-gray-200 rounded-full text-[10px] font-black uppercase tracking-widest text-[#c08b5c] hover:bg-gray-50 transition-all"
+                    >
+                      {selectedLanguage === 'en' ? 'मराठी' : 'English'}
+                    </button>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-[#c08b5c] rounded flex items-center justify-center">
+                      <Landmark className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.legal?.title}</span>
                   </div>
-                  <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.legal?.title}</span>
                 </div>
               </div>
             </nav>
@@ -1923,6 +1804,146 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                 ))}
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Download Modal */}
+      <AnimatePresence>
+        {showDownloadModal && l?.legal && downloadingDoc && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[500] flex items-center justify-center p-4 sm:p-6 bg-[#0a1f11]/90 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="bg-white rounded-[32px] p-6 sm:p-12 max-w-lg w-full shadow-2xl relative overflow-hidden z-[501]"
+            >
+              <button 
+                onClick={() => setShowDownloadModal(false)}
+                className="absolute top-4 right-4 sm:top-6 sm:right-6 p-3 text-gray-400 hover:text-[#0a1f11] hover:bg-gray-100 rounded-full transition-all z-20"
+              >
+                <X className="w-6 h-6 sm:w-5 sm:h-5" />
+              </button>
+
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <ExternalLink className="w-24 h-24 text-[#0a1f11]" />
+              </div>
+              
+              <div className="relative z-10 text-center sm:text-left">
+                {!dlSuccess ? (
+                  <>
+                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-2">{l.legal.dlModal.title}</h3>
+                    <p className="text-[#c08b5c] font-black text-xs tracking-widest uppercase mb-4">{downloadingDoc.title}</p>
+                    <p className="text-gray-500 mb-8 leading-relaxed text-sm">
+                      {l.legal.dlModal.body}
+                    </p>
+                    
+                    <div className="space-y-5">
+                      {dlError && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium text-left border border-red-100 flex items-start gap-3">
+                          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                          <p>{dlError}</p>
+                        </motion.div>
+                      )}
+                      
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.nameLabel}</label>
+                        <input 
+                          type="text" 
+                          value={dlName}
+                          onChange={(e) => { setDlName(e.target.value); setDlError(''); }}
+                          disabled={isSending}
+                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.emailLabel}</label>
+                        <input 
+                          type="email" 
+                          value={dlEmail}
+                          onChange={(e) => { setDlEmail(e.target.value); setDlError(''); }}
+                          placeholder={l.legal.dlModal.emailPlaceholder}
+                          disabled={isSending}
+                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.locLabel}</label>
+                        <input 
+                          type="text" 
+                          value={dlLocation}
+                          onChange={(e) => { setDlLocation(e.target.value); setDlError(''); }}
+                          disabled={isSending}
+                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                        <motion.button 
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={handleDownloadSubmit}
+                          disabled={!dlName.trim() || !dlLocation.trim() || !dlEmail.trim() || isSending}
+                          className="flex-1 py-4 bg-[#1b4332] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#0a1f11] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-3"
+                        >
+                          {isSending ? (
+                            <>
+                              <motion.div 
+                                animate={{ rotate: 360 }}
+                                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                              />
+                              {l.modal.sending}
+                            </>
+                          ) : l.legal.dlModal.confirm}
+                        </motion.button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="py-6 text-center"
+                  >
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12 }}>
+                        <Check className="w-10 h-10 text-green-600" />
+                      </motion.div>
+                    </div>
+                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-4">{l.legal.dlModal.successTitle}</h3>
+                    <p className="text-gray-500 mb-8 leading-relaxed max-w-sm mx-auto text-sm">
+                      {l.legal.dlModal.successBody}
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      <a 
+                        href={`mailto:sahyadringo2022@gmail.com?subject=Legal Document Download (${downloadingDoc.title})&body=User Details:%0A- Name: ${dlName}%0A- Location: ${dlLocation}%0A- Email: ${dlEmail}%0A%0AThey have requested the official legal document.`}
+                        className="w-full py-4 bg-[#c08b5c] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#a67448] transition-all shadow-lg flex justify-center"
+                      >
+                        {l.legal.dlModal.adminNotifyFallback}
+                      </a>
+                      <button 
+                        onClick={() => {
+                          setShowDownloadModal(false);
+                          setTimeout(() => setDlSuccess(false), 500);
+                        }}
+                        className="w-full py-4 bg-gray-100 text-gray-500 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-gray-200 transition-all shadow-sm"
+                      >
+                        {l.modal.close}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
