@@ -52,5 +52,21 @@ service cloud.firestore {
       allow create: if isValidSubmission(incoming());
       allow read: if true; // Allow reading collection for historical data charting
     }
+    // Security Rules for Document Downloads
+    match /downloads/{downloadId} {
+      function isValidDownload(data) {
+        return data.keys().hasAll(['timestamp', 'language', 'name', 'location', 'email', 'document']) &&
+               data.keys().size() == 6 &&
+               data.timestamp == request.time &&
+               data.language in ['en', 'mr'] &&
+               data.name is string && data.name.size() <= 100 &&
+               data.location is string && data.location.size() <= 200 &&
+               data.email is string && data.email.size() <= 150 &&
+               data.document is string && data.document.size() <= 50;
+      }
+
+      allow create: if isValidDownload(incoming());
+      allow read: if false; // Only admins or via Firebase Console
+    }
   }
 }

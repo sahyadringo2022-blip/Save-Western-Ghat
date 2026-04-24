@@ -44,7 +44,9 @@ const db = initializeFirestore(app, {
 }, (firebaseConfig as any).firestoreDatabaseId);
 
 export default function App() {
-  const [activeView, setActiveView] = useState<'main' | 'investigation'>('main');
+  const [activeView, setActiveView] = useState<'main' | 'investigation' | 'legal'>(
+    (window.location.hostname.startsWith('legal.') || window.location.pathname.includes('/legal')) ? 'legal' : 'main'
+  );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'mr' | null>(null);
   const [activeTab, setActiveTab] = useState<'mr' | 'en'>('mr');
@@ -59,6 +61,16 @@ export default function App() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showExternalModal, setShowExternalModal] = useState(false);
   const [pendingExternalUrl, setPendingExternalUrl] = useState('');
+  
+  // Download Modal State
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadingDoc, setDownloadingDoc] = useState<any>(null);
+  const [dlName, setDlName] = useState('');
+  const [dlEmail, setDlEmail] = useState('');
+  const [dlLocation, setDlLocation] = useState('');
+  const [dlError, setDlError] = useState('');
+  const [dlSuccess, setDlSuccess] = useState(false);
+
   const [expandedEvidence, setExpandedEvidence] = useState<Record<number, boolean>>({});
   const [expandedBio, setExpandedBio] = useState<Record<string, boolean>>({});
 
@@ -237,6 +249,64 @@ export default function App() {
           continue: 'Continue to Site'
         }
       },
+      legal: {
+        title: 'Legal Status',
+        subtitle: 'Comprehensive breakdown of environmental and legal objections submitted against the mining approvals.',
+        downloadInstructions: 'You can read the detailed summary of the violations below. To access the official PDF document, a download request is required.',
+        downloadBtn: 'Download PDF',
+        back: 'Back to Campaign',
+        dlModal: {
+          title: 'Download Legal Document',
+          body: 'Please provide your details to download the official legal documents. This information will be registered securely.',
+          nameLabel: 'Full Name',
+          emailLabel: 'Email Address',
+          emailPlaceholder: 'you@example.com',
+          locLabel: 'Village / City',
+          confirm: 'Confirm & Download',
+          cancel: 'Cancel',
+          successTitle: 'Download Started!',
+          successBody: 'Your download should begin shortly. Would you also like to notify the action committee manually?',
+          adminNotifyFallback: 'Notify via Email Client'
+        },
+        docs: [
+          {
+            id: 'ghungur-1',
+            title: 'Ghungur Bauxite Block-I',
+            proponent: 'Shree Bhairavnath Earth Movers',
+            area: '14.24 Ha',
+            points: [
+              { title: 'Legal Nullity', desc: 'Letter of Intent (LoI) expired on September 12, 2024, rendering the clearance process ab-initio void.' },
+              { title: 'False EIA Information', desc: 'Concealed critical biodiversity information including the presence of Endemic Birds and Medicinal Plants in the "barren land" classification.' },
+              { title: 'Public Hearing Non-Compliance', desc: 'Failed to provide point-wise replies to hundreds of critical objections raised by locals, violating EIA Notification 2006.' },
+              { title: 'Habitat Fragmentation', desc: 'The site falls squarely within a documented Wildlife Corridor, increasing the risk of human-wildlife conflict.' }
+            ]
+          },
+          {
+            id: 'ghungur-2',
+            title: 'Ghungur Bauxite Block-II',
+            proponent: 'Shri Jugai Minerals',
+            area: '13.86 Ha',
+            points: [
+              { title: 'Expired Approval', desc: 'Letter of Intent (LoI) expired on September 12, 2024. Authority over the land has legally lapsed.' },
+              { title: 'Violation of EIA 2006', desc: 'Severe Public Hearing flaws, maintaining a "Deferred" status by SEAC/SEIAA which must be permanently upheld.' },
+              { title: 'Ecological Impact', desc: 'Significant reduction in forest land threatening the habitat corridor of the Indian Bison (Gaur) and Leopards.' },
+              { title: 'Hydrological Hazard', desc: 'Red mud pollution and destruction of the mountain "sponge" threatening the water security of surrounding villages.' }
+            ]
+          },
+          {
+            id: 'perli',
+            title: 'Perli Bauxite Block',
+            proponent: 'Shree Malhar Minerals',
+            area: '7.54 Ha',
+            points: [
+              { title: 'Buffer Zone Violation', desc: 'The site is located merely 0.2km (200 meters) from the declared Western Ghats ESA boundary, an explicit violation of MoEF&CC guidelines.' },
+              { title: 'Expired LoI', desc: 'The foundational Letter of Intent (LoI) expired over two years ago on September 13, 2023.' },
+              { title: 'Forest Conservation Act Breach', desc: 'Operating without mandatory "Stage-1" Forest Clearance on protected forest land.' },
+              { title: 'Water Tower Destruction', desc: 'Irreversible destruction of the natural water catchment area, directly leading to dry wells in 5 adjoining downstream villages.' }
+            ]
+          }
+        ]
+      },
       footer: {
         about: 'A community-led campaign for the preservation of the Shahuwadi eco-sensitive zone and the protection of the Sahyadri Tiger Corridor from illegal mining encroachment.',
         top: 'Back to top'
@@ -366,7 +436,7 @@ export default function App() {
         view: 'कागदपत्र पहा',
         blocks: [
           { name: 'परळी बॉक्साईड ब्लॉक', proponent: 'श्री मल्हार मिनरल्स', status: 'LoI मुदतबाह्य (२०२३)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F557966%2F2025&proposal=350503578' },
-          { name: 'घुंगुर ब्लॉक-१', proponent: 'श्री भैरवनाथ अर्थ मूव्हर्स', status: 'LoI मुदतबाह्य (२०२५)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F544562%2F2025&proposal=131987801' },
+          { name: 'घुंगुर блок-१', proponent: 'श्री भैरवनाथ अर्थ मूव्हर्स', status: 'LoI मुदतबाह्य (२०२५)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F544562%2F2025&proposal=131987801' },
           { name: 'घुंगुर ब्लॉक-२', proponent: 'श्री जुगाई मिनरल्स', status: 'LoI मुदतबाह्य (२०२४)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F545254%2F2025&proposal=132332846' }
         ],
         externalModal: {
@@ -375,6 +445,64 @@ export default function App() {
           cancel: 'मागे फिरा',
           continue: 'पुढे जा'
         }
+      },
+      legal: {
+        title: 'कायदेशीर स्थिती आणि पुरावे',
+        subtitle: 'खाण प्रकल्पांना दिलेल्या मंजुरीविरुद्ध दाखल केलेल्या पर्यावरणीय आणि कायदेशीर आक्षेपांचे सविस्तर विश्लेषण.',
+        downloadInstructions: 'तुम्ही खाली उल्लंघनांचा सविस्तर गोषवारा वाचू शकता. अधिकृत PDF दस्तऐवज मिळवण्यासाठी डाउनलोड विनंती आवश्यक आहे.',
+        downloadBtn: 'PDF डाउनलोड करा',
+        back: 'मोहिमेवर परत या',
+        dlModal: {
+          title: 'कायदेशीर दस्तऐवज डाउनलोड करा',
+          body: 'अधिकृत कायदेशीर दस्तऐवज डाउनलोड करण्यासाठी कृपया तुमची माहिती द्या. ही माहिती सुरक्षित ठेवली जाईल.',
+          nameLabel: 'पूर्ण नाव',
+          emailLabel: 'ईमेल आयडी',
+          emailPlaceholder: 'you@example.com',
+          locLabel: 'गाव / शहर',
+          confirm: 'खात्री करा आणि डाउनलोड करा',
+          cancel: 'रद्द करा',
+          successTitle: 'डाउनलोड सुरू झाले!',
+          successBody: 'तुमचे डाउनलोड लवकरच सुरू होईल. तुम्हाला समन्वयकांना ईमेल द्वारे स्वहस्ते सूचित करायला आवडेल का?',
+          adminNotifyFallback: 'ईमेल द्वारे सूचित करा'
+        },
+        docs: [
+          {
+            id: 'ghungur-1',
+            title: 'घुंगुर बॉक्साईट ब्लॉक-१',
+            proponent: 'श्री भैरवनाथ अर्थ मूव्हर्स',
+            area: '१४.२४ हेक्टर',
+            points: [
+              { title: 'कायदेशीर अवैधता (Legal Nullity)', desc: 'लेटर ऑफ इंटेंट (LoI) १२ सप्टेंबर २०२४ रोजी संपुष्टात आला आहे, ज्यामुळे मंजुरीची प्रक्रिया बेकायदेशीर ठरते.' },
+              { title: 'चुकीचा EIA अहवाल', desc: 'ज्या ठिकाणाला "पडीक जमीन" म्हटले आहे, तिथे दुर्मिळ पक्षी आणि औषधी वनस्पती आहेत. ही माहिती जाणीवपूर्वक लपवण्यात आली आहे.' },
+              { title: 'जनसुनावणीतील त्रुटी', desc: 'स्थानिकांच्या शेकडो आक्षेपांवर कंपनीने अद्याप \'Point-wise Reply\' (मुद्देसूद उत्तर) दिलेले नाही, जे EIA अधिसूचनेचे उल्लंघन आहे.' },
+              { title: 'वन्यजीव अधिवासाचे खंडन', desc: 'सदर क्षेत्र वन्यजीवांच्या हालचालीचा मुख्य मार्ग (Wildlife Corridor) आहे, ज्यामुळे वन्यजीव-मानव संघर्ष वाढेल.' }
+            ]
+          },
+          {
+            id: 'ghungur-2',
+            title: 'घुंगुर बॉक्साईट ब्लॉक-२',
+            proponent: 'श्री जुगाई मिनरल्स',
+            area: '१३.८६ हेक्टर',
+            points: [
+              { title: 'कालबाह्य परवाना', desc: 'लेटर ऑफ इंटेंट (LoI) १२ सप्टेंबर २०२४ रोजी संपलेला आहे. या कंपनीकडे आता कोणताही कायदेशीर अधिकार राहिलेला नाही.' },
+              { title: 'EIA 2006 चे उल्लंघन', desc: 'जनसुनावणीतील त्रुटींमुळे SEAC/SEIAA ने हा प्रकल्प \'Deferred\' (स्थगित) केला आहे, जी स्थगिती कायमस्वरूपी असणे आवश्यक आहे.' },
+              { title: 'जैवविविधता हानी', desc: 'सह्याद्रीतील गवे (Indian Bison) आणि बिबट्यांच्या अधिवासाला धोका निर्माण होईल.' },
+              { title: 'जलप्रदूषण आणि पाणीटंचाई', desc: 'उत्खननामुळे लाल माती (Red Mud) नदीत मिसळून पाणी गढूळ होईल आणि नैसर्गिक जलस्त्रोत नष्ट होतील.' }
+            ]
+          },
+          {
+            id: 'perli',
+            title: 'परळी बॉक्साईड ब्लॉक',
+            proponent: 'श्री मल्हार मिनरल्स',
+            area: '७.५४ हेक्टर',
+            points: [
+              { title: 'पश्चिम घाट ESA चे उल्लंघन', desc: 'प्रस्तावित खाण क्षेत्र पश्चिम घाट पर्यावरण संवेदनशील क्षेत्रापासून (ESA) केवळ ०.२ किमी (२०० मीटर) अंतरावर आहे.' },
+              { title: 'मुदतबाह्य LoI', desc: '१३ सप्टेंबर २०२३ रोजीच मूळ परवाना (LoI) संपुष्टात आला आहे.' },
+              { title: 'वन संवर्धन कायद्याची पायमल्ली', desc: 'संरक्षित वनजमीन असूनही अद्याप \'स्टेज-१\' वन मंजुरी (Forest Clearance) मिळालेली नाही.' },
+              { title: 'जलस्रोतांचा नाश', desc: 'डोंगरमाथा (Water Tower) पोखरल्यामुळे पावसाचे पाणी जमिनीत मुरणार नाही, ज्यामुळे ५ गावांवर कायमचे जलसंकट येईल.' }
+            ]
+          }
+        ]
       },
       fallback: {
         title: 'मॅन्युअल कॉपी (ईमेल उघडत नसल्यास)',
@@ -533,6 +661,63 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
     }
 
     return isValid;
+  };
+
+  const validateDownloadFields = () => {
+    let isValid = true;
+    setDlError('');
+
+    if (!dlName.trim() || dlName.trim().length < 2) {
+      setDlError(selectedLanguage === 'mr' ? 'कृपया तुमचे पूर्ण नाव लिहा (किमान २ अक्षरे).' : 'Please enter your full name.');
+      isValid = false;
+    } else if (!dlLocation.trim() || dlLocation.trim().length < 2) {
+      setDlError(selectedLanguage === 'mr' ? 'कृपया वैध ठिकाणाचे नाव लिहा.' : 'Please enter a valid location.');
+      isValid = false;
+    } else if (!dlEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dlEmail.trim())) {
+      setDlError(selectedLanguage === 'mr' ? 'कृपया वैध ईमेल लिहा.' : 'Please enter a valid email address.');
+      isValid = false;
+    }
+
+    return isValid;
+  };
+
+  const handleDownloadSubmit = async () => {
+    if (!validateDownloadFields() || !downloadingDoc) return;
+    setIsSending(true);
+    setDlError('');
+
+    try {
+      // 1. Log to Firestore
+      const dlRef = doc(collection(db, 'downloads'));
+      await setDoc(dlRef, {
+        timestamp: serverTimestamp(),
+        language: activeTab,
+        name: dlName.trim(),
+        location: dlLocation.trim(),
+        email: dlEmail.trim(),
+        document: downloadingDoc.id
+      });
+
+      // 2. Trigger UI Success View
+      setDlSuccess(true);
+
+      // 3. Trigger actual file download
+      const link = document.createElement('a');
+      link.href = `/documents/${downloadingDoc.id}_objection.pdf`;
+      link.download = `${downloadingDoc.id}_objection.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+    } catch (error: any) {
+      handleFirestoreError(error, 'handleDownloadSubmit');
+      let defaultMsg = selectedLanguage === 'mr'
+        ? 'डेटाबेसशी संपर्क होऊ शकला नाही. कृपया पुन्हा प्रयत्न करा.'
+        : 'There was an issue connecting to our servers. Please try again.';
+      setDlError(defaultMsg);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const confirmAndSend = async () => {
@@ -835,6 +1020,147 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
         )}
       </AnimatePresence>
 
+      {/* Download Modal */}
+      <AnimatePresence>
+        {showDownloadModal && l?.legal && downloadingDoc && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 bg-[#0a1f11]/90 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="bg-white rounded-[32px] p-6 sm:p-12 max-w-lg w-full shadow-2xl relative overflow-hidden z-[201]"
+            >
+              <button 
+                onClick={() => setShowDownloadModal(false)}
+                className="absolute top-4 right-4 sm:top-6 sm:right-6 p-3 text-gray-400 hover:text-[#0a1f11] hover:bg-gray-100 rounded-full transition-all z-20"
+              >
+                <X className="w-6 h-6 sm:w-5 sm:h-5" />
+              </button>
+
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <ExternalLink className="w-24 h-24 text-[#0a1f11]" />
+              </div>
+              
+              <div className="relative z-10 text-center sm:text-left">
+                {!dlSuccess ? (
+                  <>
+                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-2">{l.legal.dlModal.title}</h3>
+                    <p className="text-[#c08b5c] font-black text-xs tracking-widest uppercase mb-4">{downloadingDoc.title}</p>
+                    <p className="text-gray-500 mb-8 leading-relaxed text-sm">
+                      {l.legal.dlModal.body}
+                    </p>
+                    
+                    <div className="space-y-5">
+                      {dlError && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium text-left border border-red-100 flex items-start gap-3">
+                          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                          <p>{dlError}</p>
+                        </motion.div>
+                      )}
+                      
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.nameLabel}</label>
+                        <input 
+                          type="text" 
+                          value={dlName}
+                          onChange={(e) => { setDlName(e.target.value); setDlError(''); }}
+                          autoFocus
+                          disabled={isSending}
+                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.emailLabel}</label>
+                        <input 
+                          type="email" 
+                          value={dlEmail}
+                          onChange={(e) => { setDlEmail(e.target.value); setDlError(''); }}
+                          placeholder={l.legal.dlModal.emailPlaceholder}
+                          disabled={isSending}
+                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l.legal.dlModal.locLabel}</label>
+                        <input 
+                          type="text" 
+                          value={dlLocation}
+                          onChange={(e) => { setDlLocation(e.target.value); setDlError(''); }}
+                          disabled={isSending}
+                          className="w-full px-5 py-4 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                        <motion.button 
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={handleDownloadSubmit}
+                          disabled={!dlName.trim() || !dlLocation.trim() || !dlEmail.trim() || isSending}
+                          className="flex-1 py-4 bg-[#1b4332] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#0a1f11] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-3"
+                        >
+                          {isSending ? (
+                            <>
+                              <motion.div 
+                                animate={{ rotate: 360 }}
+                                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                              />
+                              {l.modal.sending}
+                            </>
+                          ) : l.legal.dlModal.confirm}
+                        </motion.button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="py-6 text-center"
+                  >
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12 }}>
+                        <Check className="w-10 h-10 text-green-600" />
+                      </motion.div>
+                    </div>
+                    <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-4">{l.legal.dlModal.successTitle}</h3>
+                    <p className="text-gray-500 mb-8 leading-relaxed max-w-sm mx-auto text-sm">
+                      {l.legal.dlModal.successBody}
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      <a 
+                        href={`mailto:sahyadringo2022@gmail.com?subject=Legal Document Download (${downloadingDoc.title})&body=User Details:%0A- Name: ${dlName}%0A- Location: ${dlLocation}%0A- Email: ${dlEmail}%0A%0AThey have requested the official legal document.`}
+                        className="w-full py-4 bg-[#c08b5c] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#a67448] transition-all shadow-lg flex justify-center"
+                      >
+                        {l.legal.dlModal.adminNotifyFallback}
+                      </a>
+                      <button 
+                        onClick={() => {
+                          setShowDownloadModal(false);
+                          setTimeout(() => setDlSuccess(false), 500);
+                        }}
+                        className="w-full py-4 bg-gray-100 text-gray-500 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-gray-200 transition-all shadow-sm"
+                      >
+                        {l.modal.close}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Browser Environment Alert */}
       <div className="bg-[#c08b5c]/10 text-[#0a1f11] text-[9px] sm:text-[10px] py-2.5 px-6 text-center font-black uppercase tracking-[0.2em] relative z-50 mt-[76px] sm:mt-[88px] mx-4 sm:mx-auto max-w-5xl rounded-full">
         Best experienced by clicking "Open in new window" ↗
@@ -856,8 +1182,14 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
             <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
 
             <button 
+              onClick={() => { setActiveView('legal'); window.scrollTo(0,0); }}
+              className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden sm:block"
+            >
+              {selectedLanguage === 'mr' ? 'कायदेशीर स्थिती' : 'Legal'}
+            </button>
+            <button 
               onClick={() => { setActiveView('investigation'); window.scrollTo(0,0); }}
-              className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all"
+              className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden sm:block"
             >
               {l?.nav?.nexus}
             </button>
@@ -1429,7 +1761,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
         </div>
       </footer>
         </motion.div>
-      ) : (
+      ) : activeView === 'investigation' ? (
           <motion.div
             key="investigation"
             initial={{ opacity: 0, y: 20 }}
@@ -1503,6 +1835,92 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                     Join the Resistance
                   </button>
                 </div>
+              </div>
+            </div>
+          </motion.div>
+      ) : (
+          <motion.div
+            key="legal"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="min-h-screen bg-[#fcfcfc] pb-24"
+          >
+            <nav className="sticky top-0 z-[100] bg-white border-b border-gray-100 px-6 py-6 font-sans">
+              <div className="max-w-5xl mx-auto flex items-center justify-between">
+                <button 
+                  onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all"
+                >
+                  ← {l?.legal?.back || 'Back'}
+                </button>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-[#c08b5c] rounded flex items-center justify-center">
+                    <Landmark className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.legal?.title}</span>
+                </div>
+              </div>
+            </nav>
+
+            <div className="max-w-5xl mx-auto px-6 pt-24 space-y-24">
+              <div className="space-y-6 text-center max-w-3xl mx-auto">
+                <span className="text-[10px] font-black uppercase tracking-[0.6em] text-[#c08b5c]">Government Evidence</span>
+                <h1 className="text-5xl sm:text-7xl font-serif font-black text-[#0a1f11] leading-tight">{l?.legal?.title}</h1>
+                <p className="text-xl text-gray-500 font-light leading-relaxed">
+                  {l?.legal?.subtitle}
+                </p>
+                <p className="text-sm font-bold text-[#c08b5c] bg-[#f9f7f2] inline-block px-4 py-2 rounded-xl mt-4">
+                  {l?.legal?.downloadInstructions}
+                </p>
+              </div>
+
+              <div className="grid gap-12">
+                {l?.legal?.docs?.map((docData: any, idx: number) => (
+                  <motion.div 
+                    key={idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="bg-white border border-gray-100 p-8 sm:p-12 rounded-[3xl] sm:rounded-[4rem] shadow-sm relative overflow-hidden"
+                  >
+                    <div className="flex flex-col md:flex-row gap-8 justify-between items-start md:items-center border-b border-gray-100 pb-8 mb-8">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-3 mb-4">
+                          <span className="px-3 py-1 bg-red-100 text-red-700 text-[10px] font-black uppercase tracking-widest rounded-full">Rejected / Void</span>
+                          <span className="px-3 py-1 bg-gray-100 text-gray-600 text-[10px] font-black uppercase tracking-widest rounded-full">{docData.area}</span>
+                        </div>
+                        <h2 className="text-3xl sm:text-4xl font-serif font-black text-[#0a1f11]">{docData.title}</h2>
+                        <p className="text-gray-400 font-black uppercase tracking-widest text-xs mt-2">{docData.proponent}</p>
+                      </div>
+                      
+                      <button 
+                        onClick={() => {
+                          setDownloadingDoc(docData);
+                          setDlSuccess(false);
+                          setShowDownloadModal(true);
+                        }}
+                        className="w-full md:w-auto px-8 py-4 bg-[#0a1f11] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-[#c08b5c] transition-all flex items-center justify-center gap-3 flex-shrink-0"
+                      >
+                        <ExternalLink className="w-4 h-4" /> {l?.legal?.downloadBtn}
+                      </button>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-8">
+                      {docData.points.map((pt: any, ptIdx: number) => (
+                        <div key={ptIdx} className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <span className="w-8 h-8 rounded-full bg-[#f9f7f2] flex items-center justify-center text-[#c08b5c] font-black text-xs font-serif">
+                              {ptIdx + 1}
+                            </span>
+                            <h4 className="font-bold text-[#0a1f11] text-lg">{pt.title}</h4>
+                          </div>
+                          <p className="text-gray-500 text-sm leading-relaxed pl-11">{pt.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </div>
           </motion.div>
