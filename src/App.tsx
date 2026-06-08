@@ -48,13 +48,54 @@ const db = initializeFirestore(app, {
 export default function App() {
   const isStandaloneLegal = window.location.hostname.startsWith('legal.') || window.location.pathname.includes('/legal');
   const isStandaloneVolunteer = window.location.hostname.startsWith('volunteer.') || window.location.pathname.includes('/volunteer');
+  const isInvestigation = window.location.pathname.includes('/nexus') || window.location.pathname.includes('/investigation');
   
   const [activeView, setActiveView] = useState<'main' | 'investigation' | 'legal' | 'volunteer'>(
-    isStandaloneLegal ? 'legal' : isStandaloneVolunteer ? 'volunteer' : 'main'
+    isStandaloneLegal ? 'legal' : isStandaloneVolunteer ? 'volunteer' : isInvestigation ? 'investigation' : 'main'
   );
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path.includes('/legal')) setActiveView('legal');
+      else if (path.includes('/volunteer')) setActiveView('volunteer');
+      else if (path.includes('/nexus') || path.includes('/investigation')) setActiveView('investigation');
+      else setActiveView('main');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateTo = (view: 'main' | 'investigation' | 'legal' | 'volunteer') => {
+    setActiveView(view);
+    window.scrollTo(0, 0);
+    const path = view === 'main' ? '/' : `/${view}`;
+    // Only push state if we are not already on that path, to avoid duplicate history entries
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+    }
+  };
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'mr' | null>(null);
-  const [activeTab, setActiveTab] = useState<'mr' | 'en'>('mr');
+  const [selectedLanguage, setSelectedLanguageState] = useState<'en' | 'mr' | null>(() => {
+    const saved = localStorage.getItem('sahyadri-lang');
+    if (saved === 'en' || saved === 'mr') return saved;
+    return null;
+  });
+  
+  const setSelectedLanguage = (lang: 'en' | 'mr' | null) => {
+    setSelectedLanguageState(lang);
+    if (lang) {
+      localStorage.setItem('sahyadri-lang', lang);
+    } else {
+      localStorage.removeItem('sahyadri-lang');
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<'mr' | 'en'>(() => {
+    const saved = localStorage.getItem('sahyadri-lang');
+    return (saved === 'en' || saved === 'mr') ? saved : 'mr';
+  });
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [userName, setUserName] = useState('');
@@ -907,8 +948,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       // Auto redirect after 3 seconds
       setTimeout(() => {
         if (!isStandaloneVolunteer) {
-          setActiveView('main');
-          window.scrollTo(0, 0);
+          navigateTo('main');
         }
         setTimeout(() => {
           setVolSuccess(false);
@@ -1294,19 +1334,19 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
               <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
 
               <button 
-                onClick={() => { setActiveView('legal'); window.scrollTo(0,0); }}
+                onClick={() => navigateTo('legal')}
                 className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden sm:block"
               >
                 {selectedLanguage === 'mr' ? 'कायदेशीर स्थिती' : 'Legal'}
               </button>
               <button 
-                onClick={() => { setActiveView('investigation'); window.scrollTo(0,0); }}
+                onClick={() => navigateTo('investigation')}
                 className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-white/70 hover:text-[#c08b5c] px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden sm:block"
               >
                 {l?.nav?.nexus}
               </button>
               <button 
-                onClick={() => { setActiveView('volunteer'); window.scrollTo(0,0); }}
+                onClick={() => navigateTo('volunteer')}
                 className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-[#c08b5c] hover:text-white px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden lg:block border border-[#c08b5c]/30"
               >
                 {l?.nav?.volunteer}
@@ -1400,7 +1440,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   {l?.hero?.ctaAction} <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                 </a>
                 <button 
-                  onClick={() => { setActiveView('volunteer'); window.scrollTo(0,0); }}
+                  onClick={() => navigateTo('volunteer')}
                   className="w-full sm:w-auto px-10 py-5 sm:py-6 bg-transparent border-2 border-[#c08b5c] text-[#c08b5c] rounded-full font-black uppercase tracking-[0.2em] text-[10px] sm:text-xs hover:bg-[#c08b5c]/10 transition-all flex items-center justify-center gap-3"
                 >
                   {l?.nav?.volunteer}
@@ -1948,7 +1988,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           
           <div className="text-right space-y-4">
             <button 
-              onClick={() => { setActiveView('investigation'); window.scrollTo(0,0); }}
+              onClick={() => navigateTo('investigation')}
               className="block w-full text-right text-white/60 font-black text-[10px] uppercase tracking-widest hover:text-[#c08b5c] transition-colors mb-2"
             >
               {l?.nav?.nexus}
@@ -1970,7 +2010,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
             <nav className="sticky top-0 z-[100] bg-white border-b border-gray-100 px-6 py-6 font-sans">
               <div className="max-w-5xl mx-auto flex items-center justify-between">
                 <button 
-                  onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                  onClick={() => navigateTo('main')}
                   className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all"
                 >
                   ← {l?.investigation?.back || 'Back'}
@@ -2028,7 +2068,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                     We urge the Ministry of Environment, Forest and Climate Change (MoEFCC) and the NBWL to investigate these artificial boundary shifts designed to favor mining proponents over protected species.
                   </p>
                   <button 
-                    onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                    onClick={() => navigateTo('main')}
                     className="px-8 py-4 bg-white text-[#0a1f11] rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-[#c08b5c] hover:text-white transition-all shadow-xl shadow-black/20"
                   >
                     Join the Resistance
@@ -2056,7 +2096,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   </a>
                 ) : (
                   <button 
-                    onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                    onClick={() => navigateTo('main')}
                     className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all"
                   >
                     ← {l?.legal?.back || 'Back'}
@@ -2272,7 +2312,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   </a>
                 ) : (
                   <button 
-                    onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                    onClick={() => navigateTo('main')}
                     className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all"
                   >
                     ← {l?.legal?.back || 'Back'}
