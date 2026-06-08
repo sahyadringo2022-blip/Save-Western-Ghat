@@ -1025,16 +1025,8 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
 
   return (
     <div className="min-h-screen bg-[#f9f7f2] font-sans text-gray-900 selection:bg-[#c08b5c]/30">
-      <AnimatePresence mode="wait">
-        {activeView === 'main' ? (
-          <motion.div
-            key="main"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <AnimatePresence>
-              {!selectedLanguage && (
+      <AnimatePresence>
+        {!selectedLanguage && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1069,6 +1061,15 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        {activeView === 'main' ? (
+          <motion.div
+            key="main"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
 
       {/* External Link Modal */}
       <AnimatePresence>
@@ -1590,21 +1591,27 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       {/* Timeline Section */}
       <section className="py-24 px-6 bg-white overflow-hidden relative">
         <div className="max-w-5xl mx-auto space-y-16">
-          <div className="text-center space-y-4">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="text-center space-y-4"
+          >
             <h2 className="text-4xl sm:text-6xl font-serif font-black text-[#0a1f11] leading-tight">{l?.timeline?.title}</h2>
             <p className="text-lg text-gray-500 leading-relaxed font-light max-w-2xl mx-auto">
               {l?.timeline?.subtitle}
             </p>
-          </div>
+          </motion.div>
           
           <div className="relative border-l border-gray-200 ml-4 sm:ml-8 space-y-12 pb-8">
             {l?.timeline?.events?.map((event: any, idx: number) => (
               <motion.div 
                 key={idx}
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ delay: idx * 0.1 }}
+                initial={{ opacity: 0, y: 30, x: -20 }}
+                whileInView={{ opacity: 1, y: 0, x: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: idx * 0.1, ease: "easeOut" }}
                 className="relative pl-8 sm:pl-12"
               >
                 <div className="absolute top-0 left-0 -translate-x-1/2 w-4 h-4 rounded-full bg-[#c08b5c] border-4 border-white shadow-sm" />
@@ -1990,9 +1997,10 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                 {l?.investigation?.sections?.map((section: any, idx: number) => (
                   <motion.div 
                     key={idx}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.1 }}
+                    initial={{ opacity: 0, y: 40 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
                     className="group bg-white border border-gray-100 p-10 sm:p-16 rounded-[4rem] shadow-[0_30px_80px_rgba(0,0,0,0.02)] hover:shadow-[0_40px_100px_rgba(0,0,0,0.04)] transition-all"
                   >
                     <div className="flex flex-col sm:flex-row gap-12 items-start">
