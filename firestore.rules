@@ -15,6 +15,11 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    match /volunteers/{volunteerId} {
+      allow create: if true;
+      allow read: if false;
+    }
+
     match /downloads/{downloadId} {
       allow create: if true;
       allow read: if false;

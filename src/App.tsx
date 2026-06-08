@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useInView } from 'motion/react';
 import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis, Cell, LabelList } from 'recharts';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -33,7 +33,9 @@ import {
   TreePine,
   ExternalLink,
   ChevronDown,
-  Info
+  Info,
+  Share2,
+  Users
 } from 'lucide-react';
 
 // Initialize Firebase
@@ -45,8 +47,10 @@ const db = initializeFirestore(app, {
 
 export default function App() {
   const isStandaloneLegal = window.location.hostname.startsWith('legal.') || window.location.pathname.includes('/legal');
-  const [activeView, setActiveView] = useState<'main' | 'investigation' | 'legal'>(
-    isStandaloneLegal ? 'legal' : 'main'
+  const isStandaloneVolunteer = window.location.hostname.startsWith('volunteer.') || window.location.pathname.includes('/volunteer');
+  
+  const [activeView, setActiveView] = useState<'main' | 'investigation' | 'legal' | 'volunteer'>(
+    isStandaloneLegal ? 'legal' : isStandaloneVolunteer ? 'volunteer' : 'main'
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'mr' | null>(null);
@@ -71,11 +75,27 @@ export default function App() {
   const [dlLocation, setDlLocation] = useState('');
   const [dlError, setDlError] = useState('');
   const [dlSuccess, setDlSuccess] = useState(false);
+  
+  // Volunteer Modal State
+  const [showVolunteerModal, setShowVolunteerModal] = useState(false);
+  const [volName, setVolName] = useState('');
+  const [volEmail, setVolEmail] = useState('');
+  const [volPhone, setVolPhone] = useState('');
+  const [volLocation, setVolLocation] = useState('');
+  const [volRole, setVolRole] = useState('');
+  const [volSkills, setVolSkills] = useState('');
+  const [volError, setVolError] = useState('');
+  const [volSuccess, setVolSuccess] = useState(false);
+  const [isVolSending, setIsVolSending] = useState(false);
+
+  const chartRef = useRef(null);
+  const isChartInView = useInView(chartRef, { once: true, margin: "-100px" });
 
   const [expandedEvidence, setExpandedEvidence] = useState<Record<number, boolean>>({});
   const [expandedBio, setExpandedBio] = useState<Record<string, boolean>>({});
 
   const [sendCount, setSendCount] = useState(0); 
+  const [volCount, setVolCount] = useState(0);
   const [hasSent, setHasSent] = useState(false);
   const [chartData, setChartData] = useState([
     { name: 'Week 1', appeals: 0 },
@@ -136,11 +156,12 @@ export default function App() {
     };
     fetchHistoricalData();
 
-    const unsubscribe = onSnapshot(doc(db, 'stats', 'global'), (snapshot) => {
+    const unsubscribeStats = onSnapshot(doc(db, 'stats', 'global'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         const count = data.appealCount || 0;
         setSendCount(count);
+        setVolCount(data.volunteerCount || 0);
         
         // Ensure "Current" reflects at least the snapshot total if it's the only data we have 
         // to avoid an empty bar chart. If there is actual historical data, we will just use the real sum.
@@ -156,12 +177,12 @@ export default function App() {
       }
     }, (error) => handleFirestoreError(error, 'onSnapshot'));
 
-    return () => unsubscribe();
+    return () => unsubscribeStats();
   }, []);
 
   const content = {
     en: {
-      nav: { crisis: 'The Crisis', stats: 'Legal Status', action: 'Take Action', nexus: 'The Nexus' },
+      nav: { crisis: 'The Crisis', stats: 'Legal Status', action: 'Take Action', nexus: 'The Nexus', volunteer: 'Volunteer' },
       hero: {
         alert: 'Emergency Conservation Appeal',
         title: 'Save Sahyadri',
@@ -206,10 +227,36 @@ export default function App() {
         cta: 'Send Automatic Email',
         copyNote: 'Note: Content syncs with active tab.'
       },
+      share: {
+        title: 'Spread the Word',
+        whatsapp: 'WhatsApp',
+        facebook: 'Facebook',
+        twitter: 'X / Twitter',
+        copy: 'Copy Link',
+        message: 'Join me in protecting the Sahyadri Tiger Corridor from illegal mining! Send your objection email today. Every voice matters.',
+        copySuccess: 'Link copied!'
+      },
       impact: {
         title: 'Campaign Momentum',
         label: 'Appeals Sent So Far',
         unit: 'Citizens'
+      },
+      timeline: {
+        title: 'Timeline of Events',
+        subtitle: 'Key tracking milestones covering the Shahuwadi mining proposals, clearances, and expirations.',
+        events: [
+          { year: '2008', date: 'August 2008', title: 'Initial Approvals', desc: 'Preliminary environmental clearances were proposed for bauxite extraction in the Western Ghats without complete ecological mapping.' },
+          { year: '2012', date: 'WGEEP Report', title: 'Gadgil Committee', desc: 'The Western Ghats Ecology Expert Panel (WGEEP) designated the Shahuwadi region as Eco-Sensitive Zone 1, recommending a ban on new mining.' },
+          { year: '2023', date: 'Sep 13, 2023', title: 'Perli LoI Expiration', desc: 'The Letter of Intent for the Perli Bauxite Block officially expired, rendering further steps potentially void.' },
+          { year: '2024', date: 'Sep 12, 2024', title: 'Ghungur-II LoI Expiration', desc: 'The LoI for Ghungur Block-II lapsed, resulting in a loss of legal authority to proceed with extraction.' },
+          { year: '2025', date: 'Expected 2025', title: 'Ghungur-I LoI Expiry', desc: 'The final Ghungur Block-I LoI is set to expire, facing heavy objections in public hearings regarding false EIA data and biodiversity suppression.' },
+        ]
+      },
+      share: {
+        title: 'Share the Campaign',
+        whatsapp: 'Share on WhatsApp',
+        system: 'Share link',
+        message: 'Join the campaign to save the Sahyadri Tiger Corridor from illegal mining! Please send an objection email to protect the Western Ghats and its biodiversity: '
       },
       investigation: {
         title: 'The Nexus: Profit vs Nature',
@@ -337,10 +384,49 @@ export default function App() {
         copyCC: 'Copy CC',
         subject: 'Subject',
         body: 'Message Body'
+      },
+      volunteerModal: {
+        title: 'Become a Volunteer',
+        body: 'Join us on the ground or help us digitally to protect the Sahyadri ecosystem.',
+        whyNeed: 'Why We Need You',
+        whyNeedText: 'The Sahyadri mountain range is vast and faces continuous threats from illegal deforestation, mining, and unregulated tourism. We need passionate individuals to help monitor these regions, raise awareness, and work together with local communities. Your skills, time, and local knowledge are our most valuable assets in the fight for conservation.',
+        howHelp: 'How You Can Help',
+        howHelpText: [
+          'Ground monitoring & reporting illegal environmental damage',
+          'Assisting in native tree plantation & flora restoration',
+          'Running digital awareness & social media campaigns',
+          'Engaging with local villages to promote sustainable practices',
+          'Providing legal, technical, or administrative support'
+        ],
+        nameLabel: 'Full Name',
+        emailLabel: 'Email Address',
+        phoneLabel: 'Phone Number',
+        locLabel: 'Village / City',
+        roleLabel: 'How can you help us the most? (Select Area)',
+        roles: [
+          { value: '', label: 'Select your focus area...' },
+          { value: 'field', label: 'Field Monitoring & Ground Action' },
+          { value: 'wildlife', label: 'Wildlife & Biodiversity Monitoring' },
+          { value: 'mapping', label: 'GIS Mapping & Evidence Gathering' },
+          { value: 'legal', label: 'Legal Research & Documentation' },
+          { value: 'rti', label: 'RTI Filing & Data Collection' },
+          { value: 'social', label: 'Social Media & Digital Awareness' },
+          { value: 'media', label: 'Photography & Documentary Making' },
+          { value: 'plantation', label: 'Native Tree Plantation' },
+          { value: 'community', label: 'Community Outreach & Engagement' },
+          { value: 'campaign', label: 'Organizing Protests & Campaigns' },
+          { value: 'fundraising', label: 'Fundraising & Network Building' },
+          { value: 'tech', label: 'Technical / IT Support' },
+          { value: 'other', label: 'Other/General Volunteering' }
+        ],
+        skillsLabel: 'Additional details or skills (Optional)',
+        confirm: 'Submit Application',
+        successTitle: 'Thank You!',
+        successBody: 'We have received your details. Our team will contact you soon.'
       }
     },
     mr: {
-      nav: { crisis: 'संकट', stats: 'कायदेशीर स्थिती', action: 'कृती करा', nexus: 'जाचा' },
+      nav: { crisis: 'संकट', stats: 'कायदेशीर स्थिती', action: 'कृती करा', nexus: 'जाचा', volunteer: 'स्वयंसेवक' },
       hero: {
         alert: 'तात्काळ संवर्धन आवाहन',
         title: 'सह्याद्री वाचवा',
@@ -407,6 +493,23 @@ export default function App() {
         title: 'मोहिमेचा प्रभाव',
         label: 'आतापर्यंत पाठवलेली अपील्स',
         unit: 'नागरिक'
+      },
+      timeline: {
+        title: 'घटनाक्रम आणि कायदेशीर टप्पे',
+        subtitle: 'शाहूवाडीतील खाण प्रकल्पांचे प्रस्ताव, मुदत संपलेले परवाने आणि महत्त्वपूर्ण कायदेशीर टप्प्यांचा घटनाक्रम.',
+        events: [
+          { year: '2008', date: 'ऑगस्ट 2008', title: 'प्राथमिक मान्यता', desc: 'पश्चिम घाटात बॉक्साईट उत्खननासाठी प्राथमिक पर्यावरणीय मंजुरी प्रस्तावित केली गेली होती, ज्यामध्ये पर्यावरणीय सर्वेक्षण अपूर्ण होते.' },
+          { year: '2012', date: 'गाडगीळ समिती अहवाल', title: 'WGEEP अहवाल', desc: 'डब्लूजीईईपी (WGEEP) ने शाहूवाडीला इको-सेन्सिटिव्ह झोन १ म्हणून घोषित केले आणि नवीन खाणकामावर बंदी घालण्याची शिफारस केली.' },
+          { year: '2023', date: '13 सप्टेंबर 2023', title: 'परळी LoI कालबाह्य', desc: 'परळी बॉक्साईट ब्लॉकचा लेटर ऑफ इंटेंट (LoI) अधिकृतपणे संपुष्टात आला, ज्यामुळे पुढील प्रक्रिया अवैध ठरते.' },
+          { year: '2024', date: '12 सप्टेंबर 2024', title: 'घुंगूर-II LoI कालबाह्य', desc: 'घुंगूर-II ब्लॉकचा LoI संपला, ज्यामुळे कंपनीचा खाणकामाचा कायदेशीर अधिकार संपुष्टात आला.' },
+          { year: '2025', date: 'अपेक्षित 2025', title: 'घुंगूर-I चे आक्षेप', desc: 'घुंगूर ब्लॉक-१ चा जनसुनावणीत तीव्र विरोध झाला. EIA मधील खोटी माहिती आणि जैवविविधतेची लपवलेली माहिती यावरून मंजुरी धोक्यात आहे.' },
+        ]
+      },
+      share: {
+        title: 'ही मोहीम शेअर करा',
+        whatsapp: 'WhatsApp वर शेअर करा',
+        system: 'लिंक शेअर करा',
+        message: 'सह्याद्री व्याघ्र कॉरिडॉरला बेकायदेशीर खाणकामापासून वाचवण्यासाठी मोहिमेत सामील व्हा! कृपया पश्चिम घाट आणि येथील जैवविविधता वाचवण्यासाठी आक्षेप ईमेल पाठवा: '
       },
       investigation: {
         title: 'नेक्सस: नफा विरुद्ध निसर्ग',
@@ -516,6 +619,45 @@ export default function App() {
         copyCC: 'CC कॉपी करा',
         subject: 'विषय',
         body: 'मजकूर'
+      },
+      volunteerModal: {
+        title: 'स्वयंसेवक व्हा',
+        body: 'सह्याद्रीचे रक्षण करण्यासाठी आमच्यात सामील व्हा.',
+        whyNeed: 'आम्हाला तुमची गरज का आहे',
+        whyNeedText: 'सह्याद्रीची परिसंस्था खूप मोठी आहे आणि बेकायदेशीर जंगलतोड, खाणकाम आणि अनियंत्रित पर्यटनामुळे तिला अनेक धोके आहेत. या क्षेत्रांवर लक्ष ठेवण्यासाठी, जनजागृती करण्यासाठी आणि स्थानिक समुदायाच्या प्रयत्नांना संघटित करण्यासाठी आम्हाला तरुण आणि उत्साही लोकांची गरज आहे.',
+        howHelp: 'तुम्ही कशी मदत करू शकता',
+        howHelpText: [
+          'प्रत्यक्ष पाहणी आणि बेकायदेशीर कृत्यांचा अहवाल देणे',
+          'वृक्षारोपण आणि स्थानिक वनस्पतींच्या संवर्धनात मदत करणे',
+          'डिजिटल जनजागृती आणि सोशल मीडिया मोहिमा चालवणे',
+          'शाश्वत पद्धतींना प्रोत्साहन देण्यासाठी स्थानिक गावांशी संपर्क साधणे',
+          'कायदेशीर किंवा तांत्रिक मदत करणे'
+        ],
+        nameLabel: 'पूर्ण नाव',
+        emailLabel: 'ईमेल आयडी',
+        phoneLabel: 'फोन नंबर',
+        locLabel: 'गाव / शहर',
+        roleLabel: 'तुम्ही आम्हाला कशी मदत करू शकता? (क्षेत्र निवडा)',
+        roles: [
+          { value: '', label: 'तुमचे क्षेत्र निवडा...' },
+          { value: 'field', label: 'क्षेत्रीय पाहणी आणि प्रत्यक्ष कृती' },
+          { value: 'wildlife', label: 'वन्यजीव आणि जैवविविधता निरीक्षण' },
+          { value: 'mapping', label: 'मॅपिंग आणि पुरावे गोळा करणे' },
+          { value: 'legal', label: 'कायदेशीर संशोधन आणि दस्तऐवजीकरण' },
+          { value: 'rti', label: 'माहिती अधिकार (RTI) आणि डेटा संकलन' },
+          { value: 'social', label: 'सोशल मीडिया आणि डिजिटल जनजागृती' },
+          { value: 'media', label: 'फोटोग्राफी आणि डॉक्युमेंटरी' },
+          { value: 'plantation', label: 'स्थानिक वृक्षारोपण आणि संवर्धन' },
+          { value: 'community', label: 'स्थानिक संवाद आणि प्रबोधन' },
+          { value: 'campaign', label: 'आंदोलने आणि मोहिमा आयोजित करणे' },
+          { value: 'fundraising', label: 'निधी संकलन आणि नेटवर्क उभारणी' },
+          { value: 'tech', label: 'तांत्रिक आणि आयटी समर्थन' },
+          { value: 'other', label: 'इतर कामे' }
+        ],
+        skillsLabel: 'इतर कोणतीही माहिती किंवा कौशल्य (पर्यायी)',
+        confirm: 'अर्ज सबमिट करा',
+        successTitle: 'धन्यवाद!',
+        successBody: 'आम्हाला तुमची माहिती मिळाली आहे. आमची टीम लवकरच तुमच्याशी संपर्क साधेल.'
       }
     }
   };
@@ -680,6 +822,114 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
     }
 
     return isValid;
+  };
+
+  const validateVolunteerFields = () => {
+    let isValid = true;
+    setVolError('');
+
+    if (!volName.trim() || volName.trim().length < 2) {
+      setVolError(selectedLanguage === 'mr' ? 'कृपया तुमचे पूर्ण नाव लिहा (किमान २ अक्षरे).' : 'Please enter your full name.');
+      isValid = false;
+    } else if (!volLocation.trim() || volLocation.trim().length < 2) {
+      setVolError(selectedLanguage === 'mr' ? 'कृपया वैध ठिकाणाचे नाव लिहा.' : 'Please enter a valid location.');
+      isValid = false;
+    } else if (!volEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(volEmail.trim())) {
+      setVolError(selectedLanguage === 'mr' ? 'कृपया वैध ईमेल लिहा.' : 'Please enter a valid email address.');
+      isValid = false;
+    } else if (!volRole) {
+      setVolError(selectedLanguage === 'mr' ? 'कृपया मदत करण्याचा मार्ग निवडा.' : 'Please select how you can help.');
+      isValid = false;
+    }
+
+    return isValid;
+  };
+
+  const handleShareSystem = async () => {
+    const url = window.location.href;
+    const shareData = {
+      title: 'Sahyadri Tiger Corridor',
+      text: l?.share?.message,
+      url: url
+    };
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      navigator.clipboard.writeText(`${l?.share?.message} ${url}`);
+      alert('Link copied to clipboard!');
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const url = window.location.href;
+    const text = encodeURIComponent(`${l?.share?.message} ${url}`);
+    window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+  };
+
+  const handleVolunteerSubmit = async () => {
+    if (!validateVolunteerFields()) return;
+    setIsVolSending(true);
+    setVolError('');
+
+    try {
+      const volRef = doc(collection(db, 'volunteers'));
+      
+      // Look up full label for role
+      const selectedRoleObj = l?.volunteerModal?.roles?.find((r: any) => r.value === volRole);
+      const roleToSave = selectedRoleObj ? selectedRoleObj.label : volRole;
+
+      const batch = writeBatch(db);
+      
+      batch.set(volRef, {
+        timestamp: serverTimestamp(),
+        language: activeTab,
+        name: volName.trim(),
+        location: volLocation.trim(),
+        email: volEmail.trim(),
+        phone: volPhone.trim(),
+        role: roleToSave,
+        skills: volSkills.trim()
+      });
+
+      const statsRef = doc(db, 'stats', 'global');
+      batch.set(statsRef, { 
+        volunteerCount: increment(1)
+      }, { merge: true });
+
+      await batch.commit();
+
+      setVolSuccess(true);
+      
+      // Auto redirect after 3 seconds
+      setTimeout(() => {
+        if (!isStandaloneVolunteer) {
+          setActiveView('main');
+          window.scrollTo(0, 0);
+        }
+        setTimeout(() => {
+          setVolSuccess(false);
+          setVolName('');
+          setVolEmail('');
+          setVolPhone('');
+          setVolLocation('');
+          setVolRole('');
+          setVolSkills('');
+        }, 500);
+      }, 3000);
+
+    } catch (error: any) {
+      handleFirestoreError(error, 'handleVolunteerSubmit');
+      let defaultMsg = selectedLanguage === 'mr'
+        ? 'डेटाबेसशी संपर्क होऊ शकला नाही. कृपया पुन्हा प्रयत्न करा.'
+        : 'There was an issue connecting to our servers. Please try again.';
+      setVolError(defaultMsg);
+    } finally {
+      setIsVolSending(false);
+    }
   };
 
   const handleDownloadSubmit = async () => {
@@ -1027,7 +1277,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       </div>
       
       {/* Navigation */}
-      {!isStandaloneLegal && (
+      {!(activeView === 'legal' || activeView === 'volunteer') && (
         <div className="fixed top-0 left-0 right-0 z-[100] px-4 pt-4 sm:pt-6 pointer-events-none">
           <nav className="max-w-5xl mx-auto pointer-events-auto flex justify-between items-center bg-[#0a1f11]/80 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full py-2.5 px-3 sm:px-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <div className="flex items-center gap-2 sm:gap-6">
@@ -1054,6 +1304,12 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
               >
                 {l?.nav?.nexus}
               </button>
+              <button 
+                onClick={() => { setActiveView('volunteer'); window.scrollTo(0,0); }}
+                className="text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] text-[#c08b5c] hover:text-white px-3 py-2 rounded-full hover:bg-white/5 transition-all hidden lg:block border border-[#c08b5c]/30"
+              >
+                {l?.nav?.volunteer}
+              </button>
             </div>
 
             <button 
@@ -1065,6 +1321,8 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           </nav>
         </div>
       )}
+
+
 
       {/* Hero Section */}
       <section className="relative min-h-[100svh] flex items-center pt-10 overflow-hidden bg-[#0a1f11]">
@@ -1106,24 +1364,26 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   </div>
 
                   {/* Animated Bar Chart */}
-                  <div className="w-full h-[140px] mt-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
-                        <Tooltip 
-                          cursor={{fill: 'rgba(255,255,255,0.02)'}} 
-                          contentStyle={{ backgroundColor: '#0a1f11', border: '1px solid rgba(192,139,92,0.3)', borderRadius: '12px', fontSize: '12px' }}
-                          itemStyle={{ color: '#c08b5c', fontWeight: 'bold' }}
-                          labelStyle={{ color: 'rgba(255,255,255,0.5)', fontWeight: 'bold', marginBottom: '4px' }}
-                        />
-                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                        <Bar dataKey="appeals" radius={[4, 4, 0, 0]} isAnimationActive={true}>
-                          <LabelList dataKey="appeals" position="top" fill="rgba(255,255,255,0.7)" fontSize={11} fontWeight="black" offset={8} />
-                          { chartData.map((entry, index) => (
-                             <Cell key={`cell-${index}`} fill={index === 3 ? '#c08b5c' : '#c08b5c55'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <div ref={chartRef} className="w-full h-[140px] mt-2">
+                    {isChartInView && (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
+                          <Tooltip 
+                            cursor={{fill: 'rgba(255,255,255,0.02)'}} 
+                            contentStyle={{ backgroundColor: '#0a1f11', border: '1px solid rgba(192,139,92,0.3)', borderRadius: '12px', fontSize: '12px' }}
+                            itemStyle={{ color: '#c08b5c', fontWeight: 'bold' }}
+                            labelStyle={{ color: 'rgba(255,255,255,0.5)', fontWeight: 'bold', marginBottom: '4px' }}
+                          />
+                          <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+                          <Bar dataKey="appeals" radius={[4, 4, 0, 0]} isAnimationActive={true}>
+                            <LabelList dataKey="appeals" position="top" fill="rgba(255,255,255,0.7)" fontSize={11} fontWeight="black" offset={8} />
+                            { chartData.map((entry, index) => (
+                               <Cell key={`cell-${index}`} fill={index === 3 ? '#c08b5c' : '#c08b5c55'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1138,6 +1398,12 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                 >
                   {l?.hero?.ctaAction} <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                 </a>
+                <button 
+                  onClick={() => { setActiveView('volunteer'); window.scrollTo(0,0); }}
+                  className="w-full sm:w-auto px-10 py-5 sm:py-6 bg-transparent border-2 border-[#c08b5c] text-[#c08b5c] rounded-full font-black uppercase tracking-[0.2em] text-[10px] sm:text-xs hover:bg-[#c08b5c]/10 transition-all flex items-center justify-center gap-3"
+                >
+                  {l?.nav?.volunteer}
+                </button>
               </div>
             </motion.div>
           </div>
@@ -1317,6 +1583,41 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                 </motion.div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Timeline Section */}
+      <section className="py-24 px-6 bg-white overflow-hidden relative">
+        <div className="max-w-5xl mx-auto space-y-16">
+          <div className="text-center space-y-4">
+            <h2 className="text-4xl sm:text-6xl font-serif font-black text-[#0a1f11] leading-tight">{l?.timeline?.title}</h2>
+            <p className="text-lg text-gray-500 leading-relaxed font-light max-w-2xl mx-auto">
+              {l?.timeline?.subtitle}
+            </p>
+          </div>
+          
+          <div className="relative border-l border-gray-200 ml-4 sm:ml-8 space-y-12 pb-8">
+            {l?.timeline?.events?.map((event: any, idx: number) => (
+              <motion.div 
+                key={idx}
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ delay: idx * 0.1 }}
+                className="relative pl-8 sm:pl-12"
+              >
+                <div className="absolute top-0 left-0 -translate-x-1/2 w-4 h-4 rounded-full bg-[#c08b5c] border-4 border-white shadow-sm" />
+                <div className="bg-[#f9f7f2] hover:bg-white border border-transparent hover:border-[#c08b5c]/30 transition-all p-6 sm:p-8 rounded-3xl -mt-4 group shadow-sm hover:shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4 mb-4">
+                    <span className="text-2xl font-black font-serif text-[#0a1f11] group-hover:text-[#c08b5c] transition-colors">{event.year}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#c08b5c]">{event.date}</span>
+                  </div>
+                  <h4 className="text-xl font-bold text-[#0a1f11] mb-3">{event.title}</h4>
+                  <p className="text-gray-500 text-sm leading-relaxed">{event.desc}</p>
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
@@ -1595,6 +1896,34 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
         </div>
       </section>
 
+      {/* Share Section */}
+      <section id="share" className="py-20 px-6 bg-[#1b4332] text-white">
+        <div className="max-w-4xl mx-auto text-center space-y-10">
+          <div className="space-y-4">
+            <h2 className="text-3xl sm:text-5xl font-serif font-black">{l?.share?.title}</h2>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+              onClick={handleShareWhatsApp}
+              className="w-full sm:w-auto px-8 py-4 bg-[#25D366] hover:bg-[#128C7E] text-white rounded-full font-bold uppercase tracking-wide flex items-center justify-center gap-3 transition-transform hover:scale-105 active:scale-95 shadow-lg"
+            >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+              {l?.share?.whatsapp}
+            </button>
+            <button
+              onClick={handleShareSystem}
+              className="w-full sm:w-auto px-8 py-4 bg-white text-[#1b4332] rounded-full font-bold uppercase tracking-wide flex items-center justify-center gap-3 transition-transform hover:scale-105 active:scale-95 shadow-lg"
+            >
+              <Share2 className="w-6 h-6" />
+              {l?.share?.system}
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="bg-[#0a1f11] py-20 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-end gap-12">
@@ -1700,7 +2029,223 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
               </div>
             </div>
           </motion.div>
-      ) : (
+      ) : activeView === 'volunteer' ? (
+          <motion.div
+            key="volunteer"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="min-h-screen bg-[#fcfcfc] pb-24"
+          >
+            <nav className="sticky top-0 z-[100] bg-white border-b border-gray-100 px-6 py-6 font-sans">
+              <div className="max-w-5xl mx-auto flex items-center justify-between">
+                {isStandaloneVolunteer ? (
+                  <a 
+                    href="https://savesahyadri.in"
+                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all no-underline"
+                  >
+                    ← {l?.legal?.back || 'Back'}
+                  </a>
+                ) : (
+                  <button 
+                    onClick={() => { setActiveView('main'); window.scrollTo(0,0); }}
+                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#0a1f11] transition-all"
+                  >
+                    ← {l?.legal?.back || 'Back'}
+                  </button>
+                )}
+                <div className="flex items-center gap-4">
+                  {isStandaloneVolunteer && (
+                    <button 
+                      onClick={() => setSelectedLanguage(selectedLanguage === 'en' ? 'mr' : 'en')}
+                      className="px-3 py-1 border border-gray-200 rounded-full text-[10px] font-black uppercase tracking-widest text-[#c08b5c] hover:bg-gray-50 transition-all"
+                    >
+                      {selectedLanguage === 'en' ? 'मराठी' : 'English'}
+                    </button>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-[#1b4332] rounded flex items-center justify-center">
+                      <Leaf className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.volunteerModal?.title}</span>
+                  </div>
+                </div>
+              </div>
+            </nav>
+
+            <div className="max-w-5xl mx-auto px-6 pt-12 grid md:grid-cols-2 gap-10 items-start">
+              
+              <div className="space-y-10 mt-4 md:mt-8">
+                <div>
+                  <h3 className="text-2xl font-serif font-black text-[#0a1f11] mb-4">{l?.volunteerModal?.whyNeed}</h3>
+                  <p className="text-gray-600 leading-relaxed text-sm">
+                    {l?.volunteerModal?.whyNeedText}
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="text-2xl font-serif font-black text-[#0a1f11] mb-5">{l?.volunteerModal?.howHelp}</h3>
+                  <ul className="space-y-4">
+                    {l?.volunteerModal?.howHelpText?.map((text: string, i: number) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className="w-6 h-6 mt-0.5 rounded-full bg-[#1b4332]/10 flex items-center justify-center shrink-0">
+                          <Check className="w-3.5 h-3.5 text-[#1b4332]" />
+                        </div>
+                        <span className="text-gray-600 text-sm leading-relaxed">{text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[32px] p-6 sm:p-10 shadow-xl border border-gray-100 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                  <Leaf className="w-32 h-32 text-[#0a1f11]" />
+                </div>
+                
+                <div className="relative z-10 text-center sm:text-left h-full">
+                  {!volSuccess ? (
+                    <>
+                      <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-2">{l?.volunteerModal?.title}</h3>
+                      <p className="text-gray-500 mb-8 leading-relaxed text-sm">
+                        {l?.volunteerModal?.body}
+                      </p>
+                      
+                      {volCount > 0 && (
+                        <div className="mb-8 inline-flex items-center gap-2 px-4 py-2 bg-[#c08b5c]/10 text-[#c08b5c] rounded-full text-xs font-bold uppercase tracking-wider">
+                          <Users className="w-4 h-4" />
+                          {volCount} {selectedLanguage === 'mr' ? 'इतर नागरिक मोहिमेत जोडले गेले आहेत' : (volCount === 1 ? 'other has joined the fight' : 'others have joined the fight')}
+                        </div>
+                      )}
+                      
+                      <div className="space-y-4 pr-2">
+                        {volError && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium text-left border border-red-100 flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                            <p>{volError}</p>
+                          </motion.div>
+                        )}
+                        
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.volunteerModal?.nameLabel}</label>
+                          <input 
+                            type="text" 
+                            value={volName}
+                            onChange={(e) => { setVolName(e.target.value); setVolError(''); }}
+                            disabled={isVolSending}
+                            className="w-full px-5 py-3.5 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.volunteerModal?.emailLabel}</label>
+                          <input 
+                            type="email" 
+                            value={volEmail}
+                            onChange={(e) => { setVolEmail(e.target.value); setVolError(''); }}
+                            disabled={isVolSending}
+                            className="w-full px-5 py-3.5 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.volunteerModal?.phoneLabel}</label>
+                          <input 
+                            type="tel" 
+                            value={volPhone}
+                            onChange={(e) => { setVolPhone(e.target.value); setVolError(''); }}
+                            disabled={isVolSending}
+                            className="w-full px-5 py-3.5 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.volunteerModal?.locLabel}</label>
+                          <input 
+                            type="text" 
+                            value={volLocation}
+                            onChange={(e) => { setVolLocation(e.target.value); setVolError(''); }}
+                            disabled={isVolSending}
+                            className="w-full px-5 py-3.5 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.volunteerModal?.roleLabel}</label>
+                          <div className="relative">
+                            <select
+                              value={volRole}
+                              onChange={(e) => { setVolRole(e.target.value); setVolError(''); }}
+                              disabled={isVolSending}
+                              className="w-full px-5 py-3.5 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11] appearance-none"
+                            >
+                              {l?.volunteerModal?.roles?.map((role: any) => (
+                                <option key={role.value} value={role.value} disabled={role.value === ''}>
+                                  {role.label}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-5 text-gray-500">
+                              <ChevronRight className="w-4 h-4 rotate-90" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-[#c08b5c] mb-2">{l?.volunteerModal?.skillsLabel}</label>
+                          <textarea 
+                            value={volSkills}
+                            onChange={(e) => { setVolSkills(e.target.value); setVolError(''); }}
+                            disabled={isVolSending}
+                            rows={3}
+                            className="w-full px-5 py-3.5 bg-[#f9f7f2] border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:border-[#c08b5c] focus:ring-[#c08b5c]/10 transition-all font-bold text-[#0a1f11] resize-none"
+                          />
+                        </div>
+                        
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                          <motion.button 
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={handleVolunteerSubmit}
+                            disabled={!volName.trim() || !volLocation.trim() || !volEmail.trim() || !volRole || isVolSending}
+                            className="flex-1 py-4 bg-[#1b4332] text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-[#0a1f11] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-3"
+                          >
+                            {isVolSending ? (
+                              <>
+                                <motion.div 
+                                  animate={{ rotate: 360 }}
+                                  transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                                  className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                                />
+                                {l?.modal?.sending}
+                              </>
+                            ) : l?.volunteerModal?.confirm}
+                          </motion.button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="py-12 text-center"
+                    >
+                      <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12 }}>
+                          <Check className="w-10 h-10 text-green-600" />
+                        </motion.div>
+                      </div>
+                      <h3 className="text-3xl font-serif font-black text-[#0a1f11] mb-4">{l?.volunteerModal?.successTitle}</h3>
+                      <p className="text-gray-500 mb-8 leading-relaxed max-w-sm mx-auto text-sm">
+                        {l?.volunteerModal?.successBody}
+                      </p>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+      ) : activeView === 'legal' ? (
           <motion.div
             key="legal"
             initial={{ opacity: 0, y: 20 }}
@@ -1805,7 +2350,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
               </div>
             </div>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
       {/* Global Download Modal */}
