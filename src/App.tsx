@@ -581,7 +581,7 @@ export default function App() {
         view: 'कागदपत्र पहा',
         blocks: [
           { name: 'परळी बॉक्साईड ब्लॉक', proponent: 'श्री मल्हार मिनरल्स', status: 'LoI मुदतबाह्य (२०२३)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F557966%2F2025&proposal=350503578' },
-          { name: 'घुंगुर блок-१', proponent: 'श्री भैरवनाथ अर्थ मूव्हर्स', status: 'LoI मुदतबाह्य (२०२५)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F544562%2F2025&proposal=131987801' },
+          { name: 'घुंगुर ब्लॉक-१', proponent: 'श्री भैरवनाथ अर्थ मूव्हर्स', status: 'LoI मुदतबाह्य (२०२५)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F544562%2F2025&proposal=131987801' },
           { name: 'घुंगुर ब्लॉक-२', proponent: 'श्री जुगाई मिनरल्स', status: 'LoI मुदतबाह्य (२०२४)', url: 'https://parivesh.nic.in/newupgrade/#/trackYourProposal/proposal-details?proposalId=SIA%2FMH%2FMIN%2F545254%2F2025&proposal=132332846' }
         ],
         externalModal: {
