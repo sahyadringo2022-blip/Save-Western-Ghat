@@ -30,7 +30,6 @@ import {
   Menu, 
   X, 
   Landmark, 
-  TreePine,
   ExternalLink,
   ChevronDown,
   Info,
@@ -1066,8 +1065,8 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           >
             <div className="max-w-xl w-full text-center space-y-10 py-10">
               <div className="flex flex-col items-center gap-4">
-                <div className="p-4 sm:p-5 bg-[#c08b5c] rounded-2xl sm:rounded-3xl shadow-[0_0_40px_rgba(192,139,92,0.2)]">
-                  <TreePine className="text-[#0a1f11] w-10 h-10 sm:w-12 sm:h-12" />
+                <div className="bg-white rounded-2xl sm:rounded-3xl flex items-center justify-center w-28 h-28 sm:w-36 sm:h-36 drop-shadow-2xl overflow-visible shrink-0">
+                  <img src="/logo.png" alt="Sahyadri Bachav Logo" className="w-full h-full object-contain scale-[1.4] origin-center" />
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-serif font-black text-white tracking-tight">Sahyadri Bachav</h2>
               </div>
@@ -1309,8 +1308,8 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           <nav className="max-w-5xl mx-auto pointer-events-auto flex justify-between items-center bg-[#0a1f11]/80 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full py-2.5 px-3 sm:px-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <div className="flex items-center gap-2 sm:gap-6">
               <div className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                <div className="p-1.5 sm:p-2 bg-[#c08b5c] rounded-lg sm:rounded-full">
-                  <TreePine className="text-[#0a1f11] w-4 h-4 sm:w-4 sm:h-4" />
+                <div className="bg-white rounded-lg flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 overflow-visible shrink-0">
+                  <img src="/logo.png" alt="Sahyadri Bachav Logo" className="w-full h-full object-contain scale-[1.4] origin-center" />
                 </div>
                 <span className="font-serif font-black text-white tracking-tight sm:text-xl hidden sm:block">
                   Sahyadri Bachav
@@ -1962,8 +1961,8 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-end gap-12">
           <div className="space-y-6">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-[#c08b5c] rounded">
-                <TreePine className="text-[#0a1f11] w-6 h-6" />
+              <div className="bg-white rounded-xl flex items-center justify-center w-14 h-14 overflow-visible shrink-0">
+                <img src="/logo.png" alt="Sahyadri Bachav Logo" className="w-full h-full object-contain scale-[1.4] origin-center" />
               </div>
               <span className="font-serif font-black text-white text-3xl tracking-tight">Sahyadri Bachav</span>
             </div>
