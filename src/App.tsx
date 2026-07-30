@@ -13,12 +13,21 @@ import {
   addDoc,
   writeBatch,
   getDocFromServer,
+  getDoc,
   initializeFirestore,
   query,
   getDocs,
   orderBy
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import { 
+  googleSheetsSignIn, 
+  getSheetsAccessToken, 
+  getOrCreateVolunteerSheet, 
+  appendVolunteerToSheet, 
+  batchSyncVolunteersToSheet, 
+  VolunteerData 
+} from './googleSheets';
 import { 
   Leaf, 
   AlertTriangle, 
@@ -35,7 +44,12 @@ import {
   ChevronDown,
   Info,
   Share2,
-  Users
+  Users,
+  FileSpreadsheet,
+  RefreshCw,
+  Table,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 // Initialize Firebase
@@ -96,6 +110,21 @@ export default function App() {
     const saved = localStorage.getItem('sahyadri-lang');
     return (saved === 'en' || saved === 'mr') ? saved : 'mr';
   });
+  // Toast Notification State
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'info' | 'error' }>>([]);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [userName, setUserName] = useState('');
@@ -128,6 +157,73 @@ export default function App() {
   const [volError, setVolError] = useState('');
   const [volSuccess, setVolSuccess] = useState(false);
   const [isVolSending, setIsVolSending] = useState(false);
+
+  // Google Sheets Integration State
+  const [sheetsToken, setSheetsToken] = useState<string | null>(() => getSheetsAccessToken());
+  const [gsheetId, setGsheetId] = useState<string>(() => localStorage.getItem('sahyadri_volunteer_sheet_id') || '');
+  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+  const [sheetsSyncMsg, setSheetsSyncMsg] = useState<string>('');
+
+  const handleConnectAndSyncSheets = async () => {
+    setIsSyncingSheets(true);
+    setSheetsSyncMsg('');
+    try {
+      let token = getSheetsAccessToken() || sheetsToken;
+      if (!token) {
+        const authRes = await googleSheetsSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+          setSheetsToken(token);
+        }
+      }
+      if (!token) throw new Error('Google Sign-In required to connect Google Sheets.');
+
+      let activeSheetId = gsheetId;
+      if (!activeSheetId) {
+        activeSheetId = await getOrCreateVolunteerSheet(token);
+        setGsheetId(activeSheetId);
+      }
+
+      // Fetch existing volunteers from Firestore
+      let snapshot;
+      try {
+        const volQuery = query(collection(db, 'volunteers'), orderBy('timestamp', 'desc'));
+        snapshot = await getDocs(volQuery);
+      } catch (e) {
+        snapshot = await getDocs(collection(db, 'volunteers'));
+      }
+      const volList: VolunteerData[] = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        const dateStr = data.timestamp?.toDate ? data.timestamp.toDate().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : new Date().toLocaleString();
+        return {
+          timestamp: dateStr,
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          location: data.location || '',
+          role: data.role || '',
+          skills: data.skills || '',
+          language: data.language || 'mr'
+        };
+      });
+
+      if (volList.length > 0) {
+        await batchSyncVolunteersToSheet(token, activeSheetId, volList);
+        const msg = selectedLanguage === 'mr' ? `एकूण ${volList.length} अर्ज गूगल शीटमध्ये सेव्ह झाले!` : `Synced ${volList.length} volunteer records to Google Sheets!`;
+        setSheetsSyncMsg(msg);
+        showToast(msg, 'success');
+      } else {
+        const msg = selectedLanguage === 'mr' ? 'गूगल शीट तयार झाली! नवीन अर्ज येथे आपोआप जमा होतील.' : 'Google Sheet connected! New applications will automatically append here.';
+        setSheetsSyncMsg(msg);
+        showToast(msg, 'success');
+      }
+    } catch (err: any) {
+      console.error('Google Sheets sync error:', err);
+      setSheetsSyncMsg(err.message || 'Could not connect to Google Sheets.');
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
 
   const chartRef = useRef(null);
   const isChartInView = useInView(chartRef, { once: true, margin: "-100px" });
@@ -170,14 +266,20 @@ export default function App() {
 
     const fetchHistoricalData = async () => {
       try {
-        const q = query(collection(db, 'submissions'), orderBy('timestamp', 'asc'));
-        const sn = await getDocs(q);
+        let sn;
+        try {
+          const q = query(collection(db, 'submissions'), orderBy('timestamp', 'asc'));
+          sn = await getDocs(q);
+        } catch (err) {
+          sn = await getDocs(collection(db, 'submissions'));
+        }
+
+        const realCount = sn.size;
         const now = Date.now();
         const oneWeek = 7 * 24 * 60 * 60 * 1000;
         let w1 = 0, w2 = 0, w3 = 0, current = 0;
         sn.forEach(d => {
           const t = d.data().timestamp;
-          // Use the timestamp fallback to avoid a crash if evaluated locally immediately before sync
           const time = t && typeof t.toMillis === 'function' ? t.toMillis() : Date.now();
           const diff = now - time;
           if (diff < oneWeek) current++;
@@ -185,12 +287,32 @@ export default function App() {
           else if (diff < 3 * oneWeek) w2++;
           else w1++;
         });
-        setChartData([
-          { name: 'Week 1', appeals: w1 },
-          { name: 'Week 2', appeals: w2 },
-          { name: 'Week 3', appeals: w3 },
-          { name: 'Current', appeals: current }
-        ]);
+
+        // Set sendCount based on actual database submissions count
+        setSendCount(prev => Math.max(prev, realCount));
+
+        setChartData(prev => {
+          const hasHistory = w1 > 0 || w2 > 0 || w3 > 0;
+          return [
+            { name: 'Week 1', appeals: w1 },
+            { name: 'Week 2', appeals: w2 },
+            { name: 'Week 3', appeals: w3 },
+            { name: 'Current', appeals: hasHistory ? current : Math.max(current, realCount) }
+          ];
+        });
+
+        // Auto-heal stats/global document if needed
+        if (realCount > 0) {
+          const statsRef = doc(db, 'stats', 'global');
+          const statsSnap = await getDoc(statsRef);
+          const existingCount = statsSnap.exists() ? (statsSnap.data().appealCount || 0) : 0;
+          if (realCount > existingCount) {
+            await setDoc(statsRef, {
+              appealCount: realCount,
+              lastUpdate: serverTimestamp()
+            }, { merge: true });
+          }
+        }
       } catch (error) {
         console.error("Failed to fetch historical chart data:", error);
       }
@@ -201,18 +323,16 @@ export default function App() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         const count = data.appealCount || 0;
-        setSendCount(count);
+        setSendCount(prev => Math.max(prev, count));
         setVolCount(data.volunteerCount || 0);
         
-        // Ensure "Current" reflects at least the snapshot total if it's the only data we have 
-        // to avoid an empty bar chart. If there is actual historical data, we will just use the real sum.
         setChartData(prev => {
           const hasHistory = prev[0].appeals > 0 || prev[1].appeals > 0 || prev[2].appeals > 0;
           return [
             prev[0],
             prev[1],
             prev[2],
-            { name: 'Current', appeals: hasHistory ? prev[3].appeals : count }
+            { name: 'Current', appeals: hasHistory ? prev[3].appeals : Math.max(prev[3].appeals, count) }
           ];
         });
       }
@@ -270,11 +390,12 @@ export default function App() {
       },
       share: {
         title: 'Spread the Word',
-        whatsapp: 'WhatsApp',
+        whatsapp: 'Share on WhatsApp',
         facebook: 'Facebook',
         twitter: 'X / Twitter',
         copy: 'Copy Link',
-        message: 'Join me in protecting the Sahyadri Tiger Corridor from illegal mining! Send your objection email today. Every voice matters.',
+        system: 'Share link',
+        message: 'Join the campaign to save the Sahyadri Tiger Corridor from illegal mining! Please send an objection email to protect the Western Ghats and its biodiversity: ',
         copySuccess: 'Link copied!'
       },
       impact: {
@@ -292,12 +413,6 @@ export default function App() {
           { year: '2024', date: 'Sep 12, 2024', title: 'Ghungur-II LoI Expiration', desc: 'The LoI for Ghungur Block-II lapsed, resulting in a loss of legal authority to proceed with extraction.' },
           { year: '2025', date: 'Expected 2025', title: 'Ghungur-I LoI Expiry', desc: 'The final Ghungur Block-I LoI is set to expire, facing heavy objections in public hearings regarding false EIA data and biodiversity suppression.' },
         ]
-      },
-      share: {
-        title: 'Share the Campaign',
-        whatsapp: 'Share on WhatsApp',
-        system: 'Share link',
-        message: 'Join the campaign to save the Sahyadri Tiger Corridor from illegal mining! Please send an objection email to protect the Western Ghats and its biodiversity: '
       },
       investigation: {
         title: 'The Nexus: Profit vs Nature',
@@ -804,6 +919,12 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
+    showToast(
+      selectedLanguage === 'mr' 
+        ? 'क्लिपबोर्डवर माहिती कॉपी झाली!' 
+        : `${field.toUpperCase()} copied to clipboard!`, 
+      'success'
+    );
     setTimeout(() => setCopiedField(null), 2000);
   };
 
@@ -901,7 +1022,12 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       }
     } else {
       navigator.clipboard.writeText(`${l?.share?.message} ${url}`);
-      alert('Link copied to clipboard!');
+      showToast(
+        selectedLanguage === 'mr' 
+          ? 'मोहिम लिंक क्लिपबोर्डवर कॉपी झाली!' 
+          : 'Campaign link copied to clipboard!', 
+        'success'
+      );
     }
   };
 
@@ -943,7 +1069,36 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
 
       await batch.commit();
 
+      // Auto-append to Google Sheets if OAuth is connected
+      const currentToken = getSheetsAccessToken() || sheetsToken;
+      if (currentToken) {
+        try {
+          let activeSheetId = gsheetId;
+          if (!activeSheetId) {
+            activeSheetId = await getOrCreateVolunteerSheet(currentToken);
+            setGsheetId(activeSheetId);
+          }
+          await appendVolunteerToSheet(currentToken, activeSheetId, {
+            name: volName.trim(),
+            email: volEmail.trim(),
+            phone: volPhone.trim(),
+            location: volLocation.trim(),
+            role: roleToSave,
+            skills: volSkills.trim(),
+            language: activeTab
+          });
+        } catch (gsErr) {
+          console.warn('Google Sheets background sync failed:', gsErr);
+        }
+      }
+
       setVolSuccess(true);
+      showToast(
+        selectedLanguage === 'mr' 
+          ? 'अभिनंदन! तुमचा स्वयंसेवक अर्ज यशस्वीरित्या नोंदवला गेला आहे.' 
+          : 'Thank you! Your volunteer application has been recorded.', 
+        'success'
+      );
       
       // Auto redirect after 3 seconds
       setTimeout(() => {
@@ -991,6 +1146,12 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
 
       // 2. Trigger UI Success View
       setDlSuccess(true);
+      showToast(
+        selectedLanguage === 'mr' 
+          ? 'आक्षेप दस्तऐवज डाऊनलोड सुरू झाला आहे!' 
+          : 'Objection document download initiated!', 
+        'success'
+      );
 
       // 3. Trigger actual file download
       const link = document.createElement('a');
@@ -1017,6 +1178,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
     setSubmitError('');
 
     try {
+      setSendCount(prev => prev + 1);
       const batch = writeBatch(db);
       
       const statsRef = doc(db, 'stats', 'global');
@@ -1035,6 +1197,12 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       await batch.commit();
       setHasSent(true);
       setShowSuccess(true);
+      showToast(
+        selectedLanguage === 'mr' 
+          ? 'तुमचा आक्षेप यशस्वीरीत्या नोंदवला गेला! ईमेल उघडत आहे...' 
+          : 'Your objection has been logged! Opening email client...', 
+        'success'
+      );
       
       // Delay opening mailto slightly to allow success UI to be seen
       setTimeout(() => {
@@ -1075,10 +1243,16 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           >
             <div className="max-w-xl w-full text-center space-y-10 py-10">
               <div className="flex flex-col items-center gap-4">
-                <div className="p-4 sm:p-5 bg-[#c08b5c] rounded-2xl sm:rounded-3xl shadow-[0_0_40px_rgba(192,139,92,0.2)]">
-                  <TreePine className="text-[#0a1f11] w-10 h-10 sm:w-12 sm:h-12" />
+                <div className="p-2 bg-[#c08b5c]/20 border border-[#c08b5c]/40 rounded-3xl shadow-[0_0_50px_rgba(192,139,92,0.3)]">
+                  <img 
+                    src="/sahyadri-ngo-logo.jpg" 
+                    alt="Sahyadri NGO Logo" 
+                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shadow-xl" 
+                    referrerPolicy="no-referrer" 
+                  />
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-serif font-black text-white tracking-tight">Sahyadri Bachav</h2>
+                <span className="text-xs font-bold text-[#c08b5c] uppercase tracking-widest -mt-2">Sahyadri NGO Environmental Protection Campaign</span>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -1312,23 +1486,26 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
         )}
       </AnimatePresence>
 
-      {/* Browser Environment Alert */}
-      <div className="bg-[#c08b5c]/10 text-[#0a1f11] text-[9px] sm:text-[10px] py-2.5 px-6 text-center font-black uppercase tracking-[0.2em] relative z-50 mt-[76px] sm:mt-[88px] mx-4 sm:mx-auto max-w-5xl rounded-full">
-        Best experienced by clicking "Open in new window" ↗
-      </div>
-      
       {/* Navigation */}
       {!(activeView === 'legal' || activeView === 'volunteer') && (
         <div className="fixed top-0 left-0 right-0 z-[100] px-4 pt-4 sm:pt-6 pointer-events-none">
           <nav className="max-w-5xl mx-auto pointer-events-auto flex justify-between items-center bg-[#0a1f11]/80 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full py-2.5 px-3 sm:px-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <div className="flex items-center gap-2 sm:gap-6">
-              <div className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                <div className="p-1.5 sm:p-2 bg-[#c08b5c] rounded-lg sm:rounded-full">
-                  <TreePine className="text-[#0a1f11] w-4 h-4 sm:w-4 sm:h-4" />
+              <div className="flex items-center gap-2.5 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                <img 
+                  src="/sahyadri-ngo-logo.jpg" 
+                  alt="Sahyadri NGO Logo" 
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-[#c08b5c]/60 shadow-md shrink-0" 
+                  referrerPolicy="no-referrer" 
+                />
+                <div className="flex flex-col">
+                  <span className="font-serif font-black text-white tracking-tight text-sm sm:text-lg leading-tight">
+                    Sahyadri Bachav
+                  </span>
+                  <span className="text-[9px] text-[#c08b5c] font-black uppercase tracking-wider hidden sm:block -mt-0.5">
+                    Sahyadri NGO
+                  </span>
                 </div>
-                <span className="font-serif font-black text-white tracking-tight sm:text-xl hidden sm:block">
-                  Sahyadri Bachav
-                </span>
               </div>
               
               <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
@@ -1376,7 +1553,15 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
             >
               <div className="flex items-center justify-center gap-3 sm:gap-4 mb-6 sm:mb-8">
                 <div className="w-6 sm:w-16 h-px bg-[#c08b5c]/30" />
-                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-[#c08b5c]">{l?.hero?.alert}</span>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#c08b5c]/10 border border-[#c08b5c]/30 rounded-full">
+                  <img 
+                    src="/sahyadri-ngo-logo.jpg" 
+                    alt="Sahyadri NGO" 
+                    className="w-4 h-4 rounded-full object-cover shrink-0" 
+                    referrerPolicy="no-referrer" 
+                  />
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.25em] text-[#c08b5c]">{l?.hero?.alert} • Sahyadri NGO</span>
+                </div>
                 <div className="w-6 sm:w-16 h-px bg-[#c08b5c]/30" />
               </div>
               <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[10rem] font-serif font-black text-white leading-[1] sm:leading-[0.8] mb-8 sm:mb-12 tracking-tight">
@@ -1975,11 +2160,17 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       <footer className="bg-[#0a1f11] py-20 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-end gap-12">
           <div className="space-y-6">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-[#c08b5c] rounded">
-                <TreePine className="text-[#0a1f11] w-6 h-6" />
+            <div className="flex items-center gap-3">
+              <img 
+                src="/sahyadri-ngo-logo.jpg" 
+                alt="Sahyadri NGO Logo" 
+                className="w-11 h-11 rounded-full object-cover border border-[#c08b5c]/50 shadow-md shrink-0" 
+                referrerPolicy="no-referrer" 
+              />
+              <div>
+                <span className="font-serif font-black text-white text-3xl tracking-tight block leading-none">Sahyadri Bachav</span>
+                <span className="text-[10px] text-[#c08b5c] font-black uppercase tracking-widest block mt-1">Sahyadri NGO Environmental Initiative</span>
               </div>
-              <span className="font-serif font-black text-white text-3xl tracking-tight">Sahyadri Bachav</span>
             </div>
             <p className="text-white/40 text-sm max-w-sm tracking-wide leading-relaxed">
               {l?.footer?.about}
@@ -1994,7 +2185,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
               {l?.nav?.nexus}
             </button>
             <a href="#" className="block text-[#c08b5c] font-black text-xs uppercase tracking-widest hover:text-white transition-colors">{l?.footer?.top}</a>
-            <p className="text-[10px] text-white/20 uppercase tracking-[0.5em]">Kolhapur, India © 2026</p>
+            <p className="text-[10px] text-white/20 uppercase tracking-[0.2em] font-sans">© 2026 सह्याद्री बचाव संघटना</p>
           </div>
         </div>
       </footer>
@@ -2016,10 +2207,13 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   ← {l?.investigation?.back || 'Back'}
                 </button>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-[#1b4332] rounded flex items-center justify-center">
-                    <Leaf className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="font-serif font-black text-sm text-[#0a1f11]">Investigation Board</span>
+                  <img 
+                    src="/sahyadri-ngo-logo.jpg" 
+                    alt="Sahyadri NGO" 
+                    className="w-6 h-6 rounded-full object-cover border border-[#1b4332]" 
+                    referrerPolicy="no-referrer" 
+                  />
+                  <span className="font-serif font-black text-sm text-[#0a1f11]">Investigation Board • Sahyadri NGO</span>
                 </div>
               </div>
             </nav>
@@ -2032,6 +2226,77 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   {l?.investigation?.subtitle}
                 </p>
               </div>
+
+              {/* Eco-Sensitive Zone Map Visual */}
+              <motion.div 
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="bg-[#1b4332] rounded-[3rem] p-8 sm:p-12 relative overflow-hidden shadow-[0_40px_100px_rgba(27,67,50,0.15)]"
+              >
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-repeat"></div>
+                
+                <div className="relative z-10 flex flex-col lg:flex-row gap-12 items-center">
+                  <div className="lg:w-1/3 space-y-6">
+                    <h3 className="text-3xl font-serif font-black text-white">Shahuwadi Eco-Sensitive Zone</h3>
+                    <p className="text-white/70 font-light leading-relaxed text-sm">
+                      A visual representation of the critical Sahyadri Tiger Corridor and the encroachment of the 3 disputed bauxite mining blocks.
+                    </p>
+                    
+                    <div className="space-y-4 pt-4 border-t border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 rounded-full border-2 border-emerald-400 bg-emerald-400/20"></div>
+                        <span className="text-xs font-black uppercase tracking-wider text-white/80">Protected Corridor</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 rounded bg-red-500 animate-pulse"></div>
+                        <span className="text-xs font-black uppercase tracking-wider text-white/80">Threatened Block</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-white"></div>
+                        <span className="text-xs font-black uppercase tracking-wider text-white/80">Reference Point</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="lg:w-2/3 w-full h-[400px] relative bg-[#0a1f11] rounded-[2rem] border border-white/10 overflow-hidden shadow-inner">
+                    {/* Abstract Topography / Tiger Corridor */}
+                    <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 800 400">
+                      <path d="M0,150 C150,200 300,50 450,150 C600,250 700,50 800,100 L800,400 L0,400 Z" fill="#143425" opacity="0.5" />
+                      <path d="M0,250 C200,300 400,100 600,250 C750,350 800,250 800,250 L800,400 L0,400 Z" fill="#1b4332" opacity="0.8" />
+                      <path d="M-50,200 C150,100 350,350 500,250 C700,100 850,200 850,200" fill="none" stroke="#34d399" strokeWidth="40" strokeLinecap="round" opacity="0.15" className="blur-sm" />
+                      <path d="M-50,200 C150,100 350,350 500,250 C700,100 850,200 850,200" fill="none" stroke="#34d399" strokeWidth="8" strokeLinecap="round" strokeDasharray="10 20" opacity="0.6" />
+                    </svg>
+
+                    {/* Mining Blocks */}
+                    <div className="absolute top-[30%] left-[25%] lg:left-[35%] group">
+                      <div className="w-12 h-12 bg-red-500/20 border-2 border-red-500 rounded-lg animate-pulse absolute -translate-x-1/2 -translate-y-1/2"></div>
+                      <div className="absolute top-8 left-1/2 -translate-x-1/2 bg-black/80 px-3 py-1 rounded text-[9px] font-black uppercase tracking-wider text-red-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">Perli Block</div>
+                    </div>
+                    
+                    <div className="absolute top-[60%] left-[40%] lg:left-[55%] group">
+                      <div className="w-16 h-14 bg-red-500/20 border-2 border-red-500 rounded-lg animate-pulse absolute -translate-x-1/2 -translate-y-1/2 rotate-12"></div>
+                      <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-black/80 px-3 py-1 rounded text-[9px] font-black uppercase tracking-wider text-red-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">Ghungur Block-I</div>
+                    </div>
+
+                    <div className="absolute top-[50%] left-[65%] lg:left-[75%] group">
+                      <div className="w-14 h-16 bg-red-500/20 border-2 border-red-500 rounded-lg animate-pulse absolute -translate-x-1/2 -translate-y-1/2 -rotate-6"></div>
+                      <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-black/80 px-3 py-1 rounded text-[9px] font-black uppercase tracking-wider text-red-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">Ghungur Block-II</div>
+                    </div>
+
+                    {/* Reference Points */}
+                    <div className="absolute top-[15%] left-[70%] flex items-center gap-2 group">
+                      <div className="w-2.5 h-2.5 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+                      <span className="text-[10px] font-medium text-white/50 group-hover:text-white transition-colors cursor-default">Sahyadri Tiger Reserve Boundary</span>
+                    </div>
+
+                    <div className="absolute bottom-[10%] left-[10%] flex items-center gap-2 group">
+                      <div className="w-2 h-2 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+                      <span className="text-[10px] font-medium text-white/50 group-hover:text-white transition-colors cursor-default">Shahuwadi Town</span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
 
               <div className="grid gap-8">
                 {l?.investigation?.sections?.map((section: any, idx: number) => (
@@ -2112,10 +2377,13 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                     </button>
                   )}
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-[#1b4332] rounded flex items-center justify-center">
-                      <Leaf className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.volunteerModal?.title}</span>
+                    <img 
+                      src="/sahyadri-ngo-logo.jpg" 
+                      alt="Sahyadri NGO" 
+                      className="w-6 h-6 rounded-full object-cover border border-[#1b4332]" 
+                      referrerPolicy="no-referrer" 
+                    />
+                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.volunteerModal?.title} • Sahyadri NGO</span>
                   </div>
                 </div>
               </div>
@@ -2143,6 +2411,74 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                       </li>
                     ))}
                   </ul>
+                </div>
+
+                {/* Google Sheets Integration Card */}
+                <div className="bg-[#1b4332]/5 border border-[#1b4332]/15 rounded-[2.5rem] p-6 sm:p-8 space-y-4 shadow-sm text-[#0a1f11] relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-[#1b4332] text-white rounded-2xl shadow-md">
+                        <FileSpreadsheet className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-serif font-bold text-lg text-[#0a1f11]">Google Sheets Sync</h4>
+                        <p className="text-xs text-[#c08b5c] font-semibold">
+                          {gsheetId ? 'Spreadsheet Sync Connected' : 'Google Workspace Storage'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 bg-[#1b4332]/10 text-[#1b4332] text-[10px] font-black uppercase tracking-widest rounded-full">
+                      {gsheetId ? 'Connected' : 'Google Sheets'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    All volunteer applications are securely saved in Firestore and can be live-synced directly into an official Google Sheet for campaign management.
+                  </p>
+
+                  {sheetsSyncMsg && (
+                    <div className="text-xs font-semibold bg-emerald-50 text-emerald-800 p-3.5 rounded-2xl border border-emerald-200">
+                      {sheetsSyncMsg}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleConnectAndSyncSheets}
+                      disabled={isSyncingSheets}
+                      className="px-5 py-3.5 bg-[#1b4332] hover:bg-[#0a1f11] text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSyncingSheets ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Syncing to Sheets...
+                        </>
+                      ) : gsheetId ? (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          Sync All to Google Sheet
+                        </>
+                      ) : (
+                        <>
+                          <FileSpreadsheet className="w-4 h-4" />
+                          Connect / Create Google Sheet
+                        </>
+                      )}
+                    </button>
+
+                    {gsheetId && (
+                      <a
+                        href={`https://docs.google.com/spreadsheets/d/${gsheetId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-5 py-3.5 bg-white hover:bg-gray-50 text-[#0a1f11] rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 no-underline border border-gray-200 shadow-sm"
+                      >
+                        <ExternalLink className="w-4 h-4 text-[#c08b5c]" />
+                        Open Google Sheet ↗
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2328,10 +2664,13 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                     </button>
                   )}
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-[#c08b5c] rounded flex items-center justify-center">
-                      <Landmark className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.legal?.title}</span>
+                    <img 
+                      src="/sahyadri-ngo-logo.jpg" 
+                      alt="Sahyadri NGO" 
+                      className="w-6 h-6 rounded-full object-cover border border-[#c08b5c]" 
+                      referrerPolicy="no-referrer" 
+                    />
+                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.legal?.title} • Sahyadri NGO</span>
                   </div>
                 </div>
               </div>
@@ -2540,6 +2879,47 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Toast Notification Floating Container */}
+      <div className="fixed bottom-6 right-6 z-[600] flex flex-col gap-3 max-w-sm w-full pointer-events-none px-4 sm:px-0">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+              className="pointer-events-auto flex items-center justify-between p-4 bg-[#0a1f11] text-white border border-[#1b4332] rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.4)] backdrop-blur-md"
+            >
+              <div className="flex items-center gap-3">
+                {toast.type === 'success' && (
+                  <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                )}
+                {toast.type === 'info' && (
+                  <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl shrink-0">
+                    <Info className="w-5 h-5" />
+                  </div>
+                )}
+                {toast.type === 'error' && (
+                  <div className="p-2 bg-rose-500/20 text-rose-400 rounded-xl shrink-0">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                )}
+                <p className="text-xs font-semibold leading-snug">{toast.message}</p>
+              </div>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="p-1.5 text-white/40 hover:text-white rounded-lg hover:bg-white/10 transition-colors ml-3 shrink-0 cursor-pointer"
+                aria-label="Dismiss toast"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
