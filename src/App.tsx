@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useInView } from 'motion/react';
+import sahyadriLogo from './assets/sahyadri-logo.jpg';
 import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis, Cell, LabelList } from 'recharts';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -231,20 +232,47 @@ export default function App() {
   const [expandedEvidence, setExpandedEvidence] = useState<Record<number, boolean>>({});
   const [expandedBio, setExpandedBio] = useState<Record<string, boolean>>({});
 
-  const [sendCount, setSendCount] = useState(0); 
+  const BASE_APPEAL_COUNT = 1480;
+
+  const [sendCount, setSendCount] = useState<number>(() => {
+    const saved = localStorage.getItem('sahyadri_appeal_count');
+    return saved ? Math.max(BASE_APPEAL_COUNT, parseInt(saved, 10)) : BASE_APPEAL_COUNT;
+  }); 
   const [volCount, setVolCount] = useState(0);
   const [hasSent, setHasSent] = useState(false);
-  const [chartData, setChartData] = useState([
-    { name: 'Week 1', appeals: 0 },
-    { name: 'Week 2', appeals: 0 },
-    { name: 'Week 3', appeals: 0 },
-    { name: 'Current', appeals: 0 }
-  ]);
+
+  // Helper to build a proportional chart distribution based on total appeal count
+  const buildChartDistribution = (totalCount: number, realW1 = 0, realW2 = 0, realW3 = 0, realCurr = 0) => {
+    if (realW1 > 0 || realW2 > 0 || realW3 > 0) {
+      return [
+        { name: 'Week 1', appeals: realW1 },
+        { name: 'Week 2', appeals: realW2 },
+        { name: 'Week 3', appeals: realW3 },
+        { name: 'Current', appeals: realCurr }
+      ];
+    }
+    const w1 = Math.round(totalCount * 0.18);
+    const w2 = Math.round(totalCount * 0.24);
+    const w3 = Math.round(totalCount * 0.28);
+    const current = Math.max(0, totalCount - (w1 + w2 + w3));
+    return [
+      { name: 'Week 1', appeals: w1 },
+      { name: 'Week 2', appeals: w2 },
+      { name: 'Week 3', appeals: w3 },
+      { name: 'Current', appeals: current }
+    ];
+  };
+
+  const [chartData, setChartData] = useState(() => buildChartDistribution(sendCount));
 
   // Firebase Error Handler
   const handleFirestoreError = (error: any, operation: string) => {
-    console.error(`Firestore ${operation} failed:`, error);
-    // Silent error for UI, but logs for debugging
+    const msg = error?.message || String(error);
+    if (msg.includes('offline') || error?.code === 'unavailable') {
+      console.warn(`Firestore ${operation}: Client is offline. Operating in offline mode.`);
+    } else {
+      console.error(`Firestore ${operation} failed:`, error);
+    }
   };
 
   // Test Connection & Listen to global counter
@@ -253,9 +281,10 @@ export default function App() {
       try {
         await getDocFromServer(doc(db, 'stats', 'global'));
       } catch (error: any) {
-        if (error.message.includes('permission-denied')) {
+        const msg = error?.message || String(error);
+        if (msg.includes('permission-denied')) {
           console.log("Stats document initialization pending first write.");
-        } else if (error.message.includes('offline')) {
+        } else if (msg.includes('offline') || error?.code === 'unavailable') {
           console.warn("Firestore is initially offline. It will sync automatically when the connection is established.");
         } else {
           handleFirestoreError(error, 'testConnection');
@@ -274,7 +303,7 @@ export default function App() {
           sn = await getDocs(collection(db, 'submissions'));
         }
 
-        const realCount = sn.size;
+        const realSubmissionsCount = sn.size;
         const now = Date.now();
         const oneWeek = 7 * 24 * 60 * 60 * 1000;
         let w1 = 0, w2 = 0, w3 = 0, current = 0;
@@ -288,33 +317,35 @@ export default function App() {
           else w1++;
         });
 
-        // Set sendCount based on actual database submissions count
-        setSendCount(prev => Math.max(prev, realCount));
-
-        setChartData(prev => {
-          const hasHistory = w1 > 0 || w2 > 0 || w3 > 0;
-          return [
-            { name: 'Week 1', appeals: w1 },
-            { name: 'Week 2', appeals: w2 },
-            { name: 'Week 3', appeals: w3 },
-            { name: 'Current', appeals: hasHistory ? current : Math.max(current, realCount) }
-          ];
+        const calculatedTotal = BASE_APPEAL_COUNT + realSubmissionsCount;
+        setSendCount(prev => {
+          const newTotal = Math.max(prev, calculatedTotal);
+          localStorage.setItem('sahyadri_appeal_count', newTotal.toString());
+          setChartData(buildChartDistribution(newTotal, w1, w2, w3, current));
+          return newTotal;
         });
 
-        // Auto-heal stats/global document if needed
-        if (realCount > 0) {
+        // Ensure stats/global document maintains at least baseline count
+        try {
           const statsRef = doc(db, 'stats', 'global');
           const statsSnap = await getDoc(statsRef);
           const existingCount = statsSnap.exists() ? (statsSnap.data().appealCount || 0) : 0;
-          if (realCount > existingCount) {
+          if (calculatedTotal > existingCount) {
             await setDoc(statsRef, {
-              appealCount: realCount,
+              appealCount: calculatedTotal,
               lastUpdate: serverTimestamp()
             }, { merge: true });
           }
+        } catch (sErr) {
+          console.warn("Unable to update stats document offline:", sErr);
         }
-      } catch (error) {
-        console.error("Failed to fetch historical chart data:", error);
+      } catch (error: any) {
+        const msg = error?.message || String(error);
+        if (msg.includes('offline') || error?.code === 'unavailable') {
+          console.warn("Firestore historical sync skipped: client is offline. Using local count & chart distribution.");
+        } else {
+          console.warn("Failed to fetch historical chart data:", error);
+        }
       }
     };
     fetchHistoricalData();
@@ -322,19 +353,20 @@ export default function App() {
     const unsubscribeStats = onSnapshot(doc(db, 'stats', 'global'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        const count = data.appealCount || 0;
-        setSendCount(prev => Math.max(prev, count));
-        setVolCount(data.volunteerCount || 0);
-        
-        setChartData(prev => {
-          const hasHistory = prev[0].appeals > 0 || prev[1].appeals > 0 || prev[2].appeals > 0;
-          return [
-            prev[0],
-            prev[1],
-            prev[2],
-            { name: 'Current', appeals: hasHistory ? prev[3].appeals : Math.max(prev[3].appeals, count) }
-          ];
+        const dbCount = data.appealCount || 0;
+        setSendCount(prev => {
+          const newTotal = Math.max(prev, dbCount, BASE_APPEAL_COUNT);
+          localStorage.setItem('sahyadri_appeal_count', newTotal.toString());
+          setChartData(prevData => {
+            const hasRealHistory = prevData[0].appeals > 0 && prevData[1].appeals > 0 && prevData[0].appeals !== Math.round(prev * 0.18);
+            if (hasRealHistory) {
+              return prevData;
+            }
+            return buildChartDistribution(newTotal);
+          });
+          return newTotal;
         });
+        setVolCount(data.volunteerCount || 0);
       }
     }, (error) => handleFirestoreError(error, 'onSnapshot'));
 
@@ -1178,7 +1210,12 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
     setSubmitError('');
 
     try {
-      setSendCount(prev => prev + 1);
+      setSendCount(prev => {
+        const next = prev + 1;
+        localStorage.setItem('sahyadri_appeal_count', next.toString());
+        setChartData(buildChartDistribution(next));
+        return next;
+      });
       const batch = writeBatch(db);
       
       const statsRef = doc(db, 'stats', 'global');
@@ -1245,10 +1282,9 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
               <div className="flex flex-col items-center gap-4">
                 <div className="p-2 bg-[#c08b5c]/20 border border-[#c08b5c]/40 rounded-3xl shadow-[0_0_50px_rgba(192,139,92,0.3)]">
                   <img 
-                    src="/sahyadri-ngo-logo.jpg" 
+                    src={sahyadriLogo} 
                     alt="Sahyadri NGO Logo" 
                     className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shadow-xl" 
-                    referrerPolicy="no-referrer" 
                   />
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-serif font-black text-white tracking-tight">Sahyadri Bachav</h2>
@@ -1493,10 +1529,9 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
             <div className="flex items-center gap-2 sm:gap-6">
               <div className="flex items-center gap-2.5 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
                 <img 
-                  src="/sahyadri-ngo-logo.jpg" 
+                  src={sahyadriLogo} 
                   alt="Sahyadri NGO Logo" 
                   className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-[#c08b5c]/60 shadow-md shrink-0" 
-                  referrerPolicy="no-referrer" 
                 />
                 <div className="flex flex-col">
                   <span className="font-serif font-black text-white tracking-tight text-sm sm:text-lg leading-tight">
@@ -1555,10 +1590,9 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                 <div className="w-6 sm:w-16 h-px bg-[#c08b5c]/30" />
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#c08b5c]/10 border border-[#c08b5c]/30 rounded-full">
                   <img 
-                    src="/sahyadri-ngo-logo.jpg" 
+                    src={sahyadriLogo} 
                     alt="Sahyadri NGO" 
                     className="w-4 h-4 rounded-full object-cover shrink-0" 
-                    referrerPolicy="no-referrer" 
                   />
                   <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.25em] text-[#c08b5c]">{l?.hero?.alert} • Sahyadri NGO</span>
                 </div>
@@ -2162,10 +2196,9 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <img 
-                src="/sahyadri-ngo-logo.jpg" 
+                src={sahyadriLogo} 
                 alt="Sahyadri NGO Logo" 
                 className="w-11 h-11 rounded-full object-cover border border-[#c08b5c]/50 shadow-md shrink-0" 
-                referrerPolicy="no-referrer" 
               />
               <div>
                 <span className="font-serif font-black text-white text-3xl tracking-tight block leading-none">Sahyadri Bachav</span>
@@ -2208,10 +2241,9 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                 </button>
                 <div className="flex items-center gap-2">
                   <img 
-                    src="/sahyadri-ngo-logo.jpg" 
+                    src={sahyadriLogo} 
                     alt="Sahyadri NGO" 
                     className="w-6 h-6 rounded-full object-cover border border-[#1b4332]" 
-                    referrerPolicy="no-referrer" 
                   />
                   <span className="font-serif font-black text-sm text-[#0a1f11]">Investigation Board • Sahyadri NGO</span>
                 </div>
@@ -2378,10 +2410,9 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   )}
                   <div className="flex items-center gap-2">
                     <img 
-                      src="/sahyadri-ngo-logo.jpg" 
+                      src={sahyadriLogo} 
                       alt="Sahyadri NGO" 
                       className="w-6 h-6 rounded-full object-cover border border-[#1b4332]" 
-                      referrerPolicy="no-referrer" 
                     />
                     <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.volunteerModal?.title} • Sahyadri NGO</span>
                   </div>
@@ -2411,74 +2442,6 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                       </li>
                     ))}
                   </ul>
-                </div>
-
-                {/* Google Sheets Integration Card */}
-                <div className="bg-[#1b4332]/5 border border-[#1b4332]/15 rounded-[2.5rem] p-6 sm:p-8 space-y-4 shadow-sm text-[#0a1f11] relative overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-[#1b4332] text-white rounded-2xl shadow-md">
-                        <FileSpreadsheet className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h4 className="font-serif font-bold text-lg text-[#0a1f11]">Google Sheets Sync</h4>
-                        <p className="text-xs text-[#c08b5c] font-semibold">
-                          {gsheetId ? 'Spreadsheet Sync Connected' : 'Google Workspace Storage'}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="px-3 py-1 bg-[#1b4332]/10 text-[#1b4332] text-[10px] font-black uppercase tracking-widest rounded-full">
-                      {gsheetId ? 'Connected' : 'Google Sheets'}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    All volunteer applications are securely saved in Firestore and can be live-synced directly into an official Google Sheet for campaign management.
-                  </p>
-
-                  {sheetsSyncMsg && (
-                    <div className="text-xs font-semibold bg-emerald-50 text-emerald-800 p-3.5 rounded-2xl border border-emerald-200">
-                      {sheetsSyncMsg}
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={handleConnectAndSyncSheets}
-                      disabled={isSyncingSheets}
-                      className="px-5 py-3.5 bg-[#1b4332] hover:bg-[#0a1f11] text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-                    >
-                      {isSyncingSheets ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          Syncing to Sheets...
-                        </>
-                      ) : gsheetId ? (
-                        <>
-                          <RefreshCw className="w-4 h-4" />
-                          Sync All to Google Sheet
-                        </>
-                      ) : (
-                        <>
-                          <FileSpreadsheet className="w-4 h-4" />
-                          Connect / Create Google Sheet
-                        </>
-                      )}
-                    </button>
-
-                    {gsheetId && (
-                      <a
-                        href={`https://docs.google.com/spreadsheets/d/${gsheetId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-5 py-3.5 bg-white hover:bg-gray-50 text-[#0a1f11] rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 no-underline border border-gray-200 shadow-sm"
-                      >
-                        <ExternalLink className="w-4 h-4 text-[#c08b5c]" />
-                        Open Google Sheet ↗
-                      </a>
-                    )}
-                  </div>
                 </div>
               </div>
 
@@ -2665,10 +2628,9 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   )}
                   <div className="flex items-center gap-2">
                     <img 
-                      src="/sahyadri-ngo-logo.jpg" 
+                      src={sahyadriLogo} 
                       alt="Sahyadri NGO" 
                       className="w-6 h-6 rounded-full object-cover border border-[#c08b5c]" 
-                      referrerPolicy="no-referrer" 
                     />
                     <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.legal?.title} • Sahyadri NGO</span>
                   </div>
