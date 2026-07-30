@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useInView } from 'motion/react';
-import sahyadriLogo from './assets/sahyadri-logo.jpg';
 import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis, Cell, LabelList } from 'recharts';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -14,21 +13,12 @@ import {
   addDoc,
   writeBatch,
   getDocFromServer,
-  getDoc,
   initializeFirestore,
   query,
   getDocs,
   orderBy
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { 
-  googleSheetsSignIn, 
-  getSheetsAccessToken, 
-  getOrCreateVolunteerSheet, 
-  appendVolunteerToSheet, 
-  batchSyncVolunteersToSheet, 
-  VolunteerData 
-} from './googleSheets';
 import { 
   Leaf, 
   AlertTriangle, 
@@ -45,12 +35,7 @@ import {
   ChevronDown,
   Info,
   Share2,
-  Users,
-  FileSpreadsheet,
-  RefreshCw,
-  Table,
-  CheckCircle2,
-  AlertCircle
+  Users
 } from 'lucide-react';
 
 // Initialize Firebase
@@ -111,21 +96,6 @@ export default function App() {
     const saved = localStorage.getItem('sahyadri-lang');
     return (saved === 'en' || saved === 'mr') ? saved : 'mr';
   });
-  // Toast Notification State
-  const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'info' | 'error' }>>([]);
-
-  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-  };
-
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [userName, setUserName] = useState('');
@@ -159,120 +129,26 @@ export default function App() {
   const [volSuccess, setVolSuccess] = useState(false);
   const [isVolSending, setIsVolSending] = useState(false);
 
-  // Google Sheets Integration State
-  const [sheetsToken, setSheetsToken] = useState<string | null>(() => getSheetsAccessToken());
-  const [gsheetId, setGsheetId] = useState<string>(() => localStorage.getItem('sahyadri_volunteer_sheet_id') || '');
-  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
-  const [sheetsSyncMsg, setSheetsSyncMsg] = useState<string>('');
-
-  const handleConnectAndSyncSheets = async () => {
-    setIsSyncingSheets(true);
-    setSheetsSyncMsg('');
-    try {
-      let token = getSheetsAccessToken() || sheetsToken;
-      if (!token) {
-        const authRes = await googleSheetsSignIn();
-        if (authRes) {
-          token = authRes.accessToken;
-          setSheetsToken(token);
-        }
-      }
-      if (!token) throw new Error('Google Sign-In required to connect Google Sheets.');
-
-      let activeSheetId = gsheetId;
-      if (!activeSheetId) {
-        activeSheetId = await getOrCreateVolunteerSheet(token);
-        setGsheetId(activeSheetId);
-      }
-
-      // Fetch existing volunteers from Firestore
-      let snapshot;
-      try {
-        const volQuery = query(collection(db, 'volunteers'), orderBy('timestamp', 'desc'));
-        snapshot = await getDocs(volQuery);
-      } catch (e) {
-        snapshot = await getDocs(collection(db, 'volunteers'));
-      }
-      const volList: VolunteerData[] = snapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        const dateStr = data.timestamp?.toDate ? data.timestamp.toDate().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : new Date().toLocaleString();
-        return {
-          timestamp: dateStr,
-          name: data.name || '',
-          email: data.email || '',
-          phone: data.phone || '',
-          location: data.location || '',
-          role: data.role || '',
-          skills: data.skills || '',
-          language: data.language || 'mr'
-        };
-      });
-
-      if (volList.length > 0) {
-        await batchSyncVolunteersToSheet(token, activeSheetId, volList);
-        const msg = selectedLanguage === 'mr' ? `एकूण ${volList.length} अर्ज गूगल शीटमध्ये सेव्ह झाले!` : `Synced ${volList.length} volunteer records to Google Sheets!`;
-        setSheetsSyncMsg(msg);
-        showToast(msg, 'success');
-      } else {
-        const msg = selectedLanguage === 'mr' ? 'गूगल शीट तयार झाली! नवीन अर्ज येथे आपोआप जमा होतील.' : 'Google Sheet connected! New applications will automatically append here.';
-        setSheetsSyncMsg(msg);
-        showToast(msg, 'success');
-      }
-    } catch (err: any) {
-      console.error('Google Sheets sync error:', err);
-      setSheetsSyncMsg(err.message || 'Could not connect to Google Sheets.');
-    } finally {
-      setIsSyncingSheets(false);
-    }
-  };
-
   const chartRef = useRef(null);
   const isChartInView = useInView(chartRef, { once: true, margin: "-100px" });
 
   const [expandedEvidence, setExpandedEvidence] = useState<Record<number, boolean>>({});
   const [expandedBio, setExpandedBio] = useState<Record<string, boolean>>({});
 
-  const BASE_APPEAL_COUNT = 1480;
-
-  const [sendCount, setSendCount] = useState<number>(() => {
-    const saved = localStorage.getItem('sahyadri_appeal_count');
-    return saved ? Math.max(BASE_APPEAL_COUNT, parseInt(saved, 10)) : BASE_APPEAL_COUNT;
-  }); 
+  const [sendCount, setSendCount] = useState(0); 
   const [volCount, setVolCount] = useState(0);
   const [hasSent, setHasSent] = useState(false);
-
-  // Helper to build a proportional chart distribution based on total appeal count
-  const buildChartDistribution = (totalCount: number, realW1 = 0, realW2 = 0, realW3 = 0, realCurr = 0) => {
-    if (realW1 > 0 || realW2 > 0 || realW3 > 0) {
-      return [
-        { name: 'Week 1', appeals: realW1 },
-        { name: 'Week 2', appeals: realW2 },
-        { name: 'Week 3', appeals: realW3 },
-        { name: 'Current', appeals: realCurr }
-      ];
-    }
-    const w1 = Math.round(totalCount * 0.18);
-    const w2 = Math.round(totalCount * 0.24);
-    const w3 = Math.round(totalCount * 0.28);
-    const current = Math.max(0, totalCount - (w1 + w2 + w3));
-    return [
-      { name: 'Week 1', appeals: w1 },
-      { name: 'Week 2', appeals: w2 },
-      { name: 'Week 3', appeals: w3 },
-      { name: 'Current', appeals: current }
-    ];
-  };
-
-  const [chartData, setChartData] = useState(() => buildChartDistribution(sendCount));
+  const [chartData, setChartData] = useState([
+    { name: 'Week 1', appeals: 0 },
+    { name: 'Week 2', appeals: 0 },
+    { name: 'Week 3', appeals: 0 },
+    { name: 'Current', appeals: 0 }
+  ]);
 
   // Firebase Error Handler
   const handleFirestoreError = (error: any, operation: string) => {
-    const msg = error?.message || String(error);
-    if (msg.includes('offline') || error?.code === 'unavailable') {
-      console.warn(`Firestore ${operation}: Client is offline. Operating in offline mode.`);
-    } else {
-      console.error(`Firestore ${operation} failed:`, error);
-    }
+    console.error(`Firestore ${operation} failed:`, error);
+    // Silent error for UI, but logs for debugging
   };
 
   // Test Connection & Listen to global counter
@@ -281,10 +157,9 @@ export default function App() {
       try {
         await getDocFromServer(doc(db, 'stats', 'global'));
       } catch (error: any) {
-        const msg = error?.message || String(error);
-        if (msg.includes('permission-denied')) {
+        if (error.message.includes('permission-denied')) {
           console.log("Stats document initialization pending first write.");
-        } else if (msg.includes('offline') || error?.code === 'unavailable') {
+        } else if (error.message.includes('offline')) {
           console.warn("Firestore is initially offline. It will sync automatically when the connection is established.");
         } else {
           handleFirestoreError(error, 'testConnection');
@@ -295,20 +170,14 @@ export default function App() {
 
     const fetchHistoricalData = async () => {
       try {
-        let sn;
-        try {
-          const q = query(collection(db, 'submissions'), orderBy('timestamp', 'asc'));
-          sn = await getDocs(q);
-        } catch (err) {
-          sn = await getDocs(collection(db, 'submissions'));
-        }
-
-        const realSubmissionsCount = sn.size;
+        const q = query(collection(db, 'submissions'), orderBy('timestamp', 'asc'));
+        const sn = await getDocs(q);
         const now = Date.now();
         const oneWeek = 7 * 24 * 60 * 60 * 1000;
         let w1 = 0, w2 = 0, w3 = 0, current = 0;
         sn.forEach(d => {
           const t = d.data().timestamp;
+          // Use the timestamp fallback to avoid a crash if evaluated locally immediately before sync
           const time = t && typeof t.toMillis === 'function' ? t.toMillis() : Date.now();
           const diff = now - time;
           if (diff < oneWeek) current++;
@@ -316,36 +185,14 @@ export default function App() {
           else if (diff < 3 * oneWeek) w2++;
           else w1++;
         });
-
-        const calculatedTotal = BASE_APPEAL_COUNT + realSubmissionsCount;
-        setSendCount(prev => {
-          const newTotal = Math.max(prev, calculatedTotal);
-          localStorage.setItem('sahyadri_appeal_count', newTotal.toString());
-          setChartData(buildChartDistribution(newTotal, w1, w2, w3, current));
-          return newTotal;
-        });
-
-        // Ensure stats/global document maintains at least baseline count
-        try {
-          const statsRef = doc(db, 'stats', 'global');
-          const statsSnap = await getDoc(statsRef);
-          const existingCount = statsSnap.exists() ? (statsSnap.data().appealCount || 0) : 0;
-          if (calculatedTotal > existingCount) {
-            await setDoc(statsRef, {
-              appealCount: calculatedTotal,
-              lastUpdate: serverTimestamp()
-            }, { merge: true });
-          }
-        } catch (sErr) {
-          console.warn("Unable to update stats document offline:", sErr);
-        }
-      } catch (error: any) {
-        const msg = error?.message || String(error);
-        if (msg.includes('offline') || error?.code === 'unavailable') {
-          console.warn("Firestore historical sync skipped: client is offline. Using local count & chart distribution.");
-        } else {
-          console.warn("Failed to fetch historical chart data:", error);
-        }
+        setChartData([
+          { name: 'Week 1', appeals: w1 },
+          { name: 'Week 2', appeals: w2 },
+          { name: 'Week 3', appeals: w3 },
+          { name: 'Current', appeals: current }
+        ]);
+      } catch (error) {
+        console.error("Failed to fetch historical chart data:", error);
       }
     };
     fetchHistoricalData();
@@ -353,20 +200,21 @@ export default function App() {
     const unsubscribeStats = onSnapshot(doc(db, 'stats', 'global'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        const dbCount = data.appealCount || 0;
-        setSendCount(prev => {
-          const newTotal = Math.max(prev, dbCount, BASE_APPEAL_COUNT);
-          localStorage.setItem('sahyadri_appeal_count', newTotal.toString());
-          setChartData(prevData => {
-            const hasRealHistory = prevData[0].appeals > 0 && prevData[1].appeals > 0 && prevData[0].appeals !== Math.round(prev * 0.18);
-            if (hasRealHistory) {
-              return prevData;
-            }
-            return buildChartDistribution(newTotal);
-          });
-          return newTotal;
-        });
+        const count = data.appealCount || 0;
+        setSendCount(count);
         setVolCount(data.volunteerCount || 0);
+        
+        // Ensure "Current" reflects at least the snapshot total if it's the only data we have 
+        // to avoid an empty bar chart. If there is actual historical data, we will just use the real sum.
+        setChartData(prev => {
+          const hasHistory = prev[0].appeals > 0 || prev[1].appeals > 0 || prev[2].appeals > 0;
+          return [
+            prev[0],
+            prev[1],
+            prev[2],
+            { name: 'Current', appeals: hasHistory ? prev[3].appeals : count }
+          ];
+        });
       }
     }, (error) => handleFirestoreError(error, 'onSnapshot'));
 
@@ -420,16 +268,6 @@ export default function App() {
         cta: 'Send Automatic Email',
         copyNote: 'Note: Content syncs with active tab.'
       },
-      share: {
-        title: 'Spread the Word',
-        whatsapp: 'Share on WhatsApp',
-        facebook: 'Facebook',
-        twitter: 'X / Twitter',
-        copy: 'Copy Link',
-        system: 'Share link',
-        message: 'Join the campaign to save the Sahyadri Tiger Corridor from illegal mining! Please send an objection email to protect the Western Ghats and its biodiversity: ',
-        copySuccess: 'Link copied!'
-      },
       impact: {
         title: 'Campaign Momentum',
         label: 'Appeals Sent So Far',
@@ -445,6 +283,12 @@ export default function App() {
           { year: '2024', date: 'Sep 12, 2024', title: 'Ghungur-II LoI Expiration', desc: 'The LoI for Ghungur Block-II lapsed, resulting in a loss of legal authority to proceed with extraction.' },
           { year: '2025', date: 'Expected 2025', title: 'Ghungur-I LoI Expiry', desc: 'The final Ghungur Block-I LoI is set to expire, facing heavy objections in public hearings regarding false EIA data and biodiversity suppression.' },
         ]
+      },
+      share: {
+        title: 'Share the Campaign',
+        whatsapp: 'Share on WhatsApp',
+        system: 'Share link',
+        message: 'Join the campaign to save the Sahyadri Tiger Corridor from illegal mining! Please send an objection email to protect the Western Ghats and its biodiversity: '
       },
       investigation: {
         title: 'The Nexus: Profit vs Nature',
@@ -951,12 +795,6 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
-    showToast(
-      selectedLanguage === 'mr' 
-        ? 'क्लिपबोर्डवर माहिती कॉपी झाली!' 
-        : `${field.toUpperCase()} copied to clipboard!`, 
-      'success'
-    );
     setTimeout(() => setCopiedField(null), 2000);
   };
 
@@ -1054,12 +892,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       }
     } else {
       navigator.clipboard.writeText(`${l?.share?.message} ${url}`);
-      showToast(
-        selectedLanguage === 'mr' 
-          ? 'मोहिम लिंक क्लिपबोर्डवर कॉपी झाली!' 
-          : 'Campaign link copied to clipboard!', 
-        'success'
-      );
+      alert('Link copied to clipboard!');
     }
   };
 
@@ -1101,36 +934,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
 
       await batch.commit();
 
-      // Auto-append to Google Sheets if OAuth is connected
-      const currentToken = getSheetsAccessToken() || sheetsToken;
-      if (currentToken) {
-        try {
-          let activeSheetId = gsheetId;
-          if (!activeSheetId) {
-            activeSheetId = await getOrCreateVolunteerSheet(currentToken);
-            setGsheetId(activeSheetId);
-          }
-          await appendVolunteerToSheet(currentToken, activeSheetId, {
-            name: volName.trim(),
-            email: volEmail.trim(),
-            phone: volPhone.trim(),
-            location: volLocation.trim(),
-            role: roleToSave,
-            skills: volSkills.trim(),
-            language: activeTab
-          });
-        } catch (gsErr) {
-          console.warn('Google Sheets background sync failed:', gsErr);
-        }
-      }
-
       setVolSuccess(true);
-      showToast(
-        selectedLanguage === 'mr' 
-          ? 'अभिनंदन! तुमचा स्वयंसेवक अर्ज यशस्वीरित्या नोंदवला गेला आहे.' 
-          : 'Thank you! Your volunteer application has been recorded.', 
-        'success'
-      );
       
       // Auto redirect after 3 seconds
       setTimeout(() => {
@@ -1178,12 +982,6 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
 
       // 2. Trigger UI Success View
       setDlSuccess(true);
-      showToast(
-        selectedLanguage === 'mr' 
-          ? 'आक्षेप दस्तऐवज डाऊनलोड सुरू झाला आहे!' 
-          : 'Objection document download initiated!', 
-        'success'
-      );
 
       // 3. Trigger actual file download
       const link = document.createElement('a');
@@ -1210,12 +1008,6 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
     setSubmitError('');
 
     try {
-      setSendCount(prev => {
-        const next = prev + 1;
-        localStorage.setItem('sahyadri_appeal_count', next.toString());
-        setChartData(buildChartDistribution(next));
-        return next;
-      });
       const batch = writeBatch(db);
       
       const statsRef = doc(db, 'stats', 'global');
@@ -1234,12 +1026,6 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       await batch.commit();
       setHasSent(true);
       setShowSuccess(true);
-      showToast(
-        selectedLanguage === 'mr' 
-          ? 'तुमचा आक्षेप यशस्वीरीत्या नोंदवला गेला! ईमेल उघडत आहे...' 
-          : 'Your objection has been logged! Opening email client...', 
-        'success'
-      );
       
       // Delay opening mailto slightly to allow success UI to be seen
       setTimeout(() => {
@@ -1269,7 +1055,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
   };
 
   return (
-    <div className="min-h-screen bg-[#f9f7f2] font-sans text-gray-900 selection:bg-[#c08b5c]/30">
+    <div lang={activeTab} className="min-h-screen bg-[#f9f7f2] font-sans text-gray-900 selection:bg-[#c08b5c]/30">
       <AnimatePresence>
         {!selectedLanguage && (
           <motion.div 
@@ -1280,15 +1066,10 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           >
             <div className="max-w-xl w-full text-center space-y-10 py-10">
               <div className="flex flex-col items-center gap-4">
-                <div className="p-2 bg-[#c08b5c]/20 border border-[#c08b5c]/40 rounded-3xl shadow-[0_0_50px_rgba(192,139,92,0.3)]">
-                  <img 
-                    src={sahyadriLogo} 
-                    alt="Sahyadri NGO Logo" 
-                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shadow-xl" 
-                  />
+                <div className="p-4 sm:p-5 bg-[#c08b5c] rounded-2xl sm:rounded-3xl shadow-[0_0_40px_rgba(192,139,92,0.2)]">
+                  <TreePine className="text-[#0a1f11] w-10 h-10 sm:w-12 sm:h-12" />
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-serif font-black text-white tracking-tight">Sahyadri Bachav</h2>
-                <span className="text-xs font-bold text-[#c08b5c] uppercase tracking-widest -mt-2">Sahyadri NGO Environmental Protection Campaign</span>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -1527,20 +1308,13 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
         <div className="fixed top-0 left-0 right-0 z-[100] px-4 pt-4 sm:pt-6 pointer-events-none">
           <nav className="max-w-5xl mx-auto pointer-events-auto flex justify-between items-center bg-[#0a1f11]/80 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full py-2.5 px-3 sm:px-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <div className="flex items-center gap-2 sm:gap-6">
-              <div className="flex items-center gap-2.5 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                <img 
-                  src={sahyadriLogo} 
-                  alt="Sahyadri NGO Logo" 
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-[#c08b5c]/60 shadow-md shrink-0" 
-                />
-                <div className="flex flex-col">
-                  <span className="font-serif font-black text-white tracking-tight text-sm sm:text-lg leading-tight">
-                    Sahyadri Bachav
-                  </span>
-                  <span className="text-[9px] text-[#c08b5c] font-black uppercase tracking-wider hidden sm:block -mt-0.5">
-                    Sahyadri NGO
-                  </span>
+              <div className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity pl-1 sm:pl-2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                <div className="p-1.5 sm:p-2 bg-[#c08b5c] rounded-lg sm:rounded-full">
+                  <TreePine className="text-[#0a1f11] w-4 h-4 sm:w-4 sm:h-4" />
                 </div>
+                <span className="font-serif font-black text-white tracking-tight sm:text-xl hidden sm:block">
+                  Sahyadri Bachav
+                </span>
               </div>
               
               <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
@@ -1588,14 +1362,7 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
             >
               <div className="flex items-center justify-center gap-3 sm:gap-4 mb-6 sm:mb-8">
                 <div className="w-6 sm:w-16 h-px bg-[#c08b5c]/30" />
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#c08b5c]/10 border border-[#c08b5c]/30 rounded-full">
-                  <img 
-                    src={sahyadriLogo} 
-                    alt="Sahyadri NGO" 
-                    className="w-4 h-4 rounded-full object-cover shrink-0" 
-                  />
-                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.25em] text-[#c08b5c]">{l?.hero?.alert} • Sahyadri NGO</span>
-                </div>
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-[#c08b5c]">{l?.hero?.alert}</span>
                 <div className="w-6 sm:w-16 h-px bg-[#c08b5c]/30" />
               </div>
               <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[10rem] font-serif font-black text-white leading-[1] sm:leading-[0.8] mb-8 sm:mb-12 tracking-tight">
@@ -2194,16 +1961,11 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
       <footer className="bg-[#0a1f11] py-20 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-end gap-12">
           <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <img 
-                src={sahyadriLogo} 
-                alt="Sahyadri NGO Logo" 
-                className="w-11 h-11 rounded-full object-cover border border-[#c08b5c]/50 shadow-md shrink-0" 
-              />
-              <div>
-                <span className="font-serif font-black text-white text-3xl tracking-tight block leading-none">Sahyadri Bachav</span>
-                <span className="text-[10px] text-[#c08b5c] font-black uppercase tracking-widest block mt-1">Sahyadri NGO Environmental Initiative</span>
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-[#c08b5c] rounded">
+                <TreePine className="text-[#0a1f11] w-6 h-6" />
               </div>
+              <span className="font-serif font-black text-white text-3xl tracking-tight">Sahyadri Bachav</span>
             </div>
             <p className="text-white/40 text-sm max-w-sm tracking-wide leading-relaxed">
               {l?.footer?.about}
@@ -2240,12 +2002,10 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                   ← {l?.investigation?.back || 'Back'}
                 </button>
                 <div className="flex items-center gap-2">
-                  <img 
-                    src={sahyadriLogo} 
-                    alt="Sahyadri NGO" 
-                    className="w-6 h-6 rounded-full object-cover border border-[#1b4332]" 
-                  />
-                  <span className="font-serif font-black text-sm text-[#0a1f11]">Investigation Board • Sahyadri NGO</span>
+                  <div className="w-6 h-6 bg-[#1b4332] rounded flex items-center justify-center">
+                    <Leaf className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="font-serif font-black text-sm text-[#0a1f11]">Investigation Board</span>
                 </div>
               </div>
             </nav>
@@ -2409,12 +2169,10 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                     </button>
                   )}
                   <div className="flex items-center gap-2">
-                    <img 
-                      src={sahyadriLogo} 
-                      alt="Sahyadri NGO" 
-                      className="w-6 h-6 rounded-full object-cover border border-[#1b4332]" 
-                    />
-                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.volunteerModal?.title} • Sahyadri NGO</span>
+                    <div className="w-6 h-6 bg-[#1b4332] rounded flex items-center justify-center">
+                      <Leaf className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.volunteerModal?.title}</span>
                   </div>
                 </div>
               </div>
@@ -2627,12 +2385,10 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
                     </button>
                   )}
                   <div className="flex items-center gap-2">
-                    <img 
-                      src={sahyadriLogo} 
-                      alt="Sahyadri NGO" 
-                      className="w-6 h-6 rounded-full object-cover border border-[#c08b5c]" 
-                    />
-                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.legal?.title} • Sahyadri NGO</span>
+                    <div className="w-6 h-6 bg-[#c08b5c] rounded flex items-center justify-center">
+                      <Landmark className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-serif font-black text-sm text-[#0a1f11]">{l?.legal?.title}</span>
                   </div>
                 </div>
               </div>
@@ -2841,47 +2597,6 @@ ${location || 'शाहूवाडी, कोल्हापूर'}.`,
           </motion.div>
         )}
       </AnimatePresence>
-      {/* Toast Notification Floating Container */}
-      <div className="fixed bottom-6 right-6 z-[600] flex flex-col gap-3 max-w-sm w-full pointer-events-none px-4 sm:px-0">
-        <AnimatePresence>
-          {toasts.map((toast) => (
-            <motion.div
-              key={toast.id}
-              initial={{ opacity: 0, y: 30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-              className="pointer-events-auto flex items-center justify-between p-4 bg-[#0a1f11] text-white border border-[#1b4332] rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.4)] backdrop-blur-md"
-            >
-              <div className="flex items-center gap-3">
-                {toast.type === 'success' && (
-                  <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0">
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                )}
-                {toast.type === 'info' && (
-                  <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl shrink-0">
-                    <Info className="w-5 h-5" />
-                  </div>
-                )}
-                {toast.type === 'error' && (
-                  <div className="p-2 bg-rose-500/20 text-rose-400 rounded-xl shrink-0">
-                    <AlertCircle className="w-5 h-5" />
-                  </div>
-                )}
-                <p className="text-xs font-semibold leading-snug">{toast.message}</p>
-              </div>
-              <button
-                onClick={() => removeToast(toast.id)}
-                className="p-1.5 text-white/40 hover:text-white rounded-lg hover:bg-white/10 transition-colors ml-3 shrink-0 cursor-pointer"
-                aria-label="Dismiss toast"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
     </div>
   );
 }

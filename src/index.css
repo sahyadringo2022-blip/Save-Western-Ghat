@@ -10,3 +10,43 @@
 body {
   background-color: #f9f7f2;
 }
+
+/* Marathi Text Layout Optimizations */
+[lang="mr"] {
+  font-family: var(--font-marathi);
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  word-break: break-word; /* Ensure long words don't break the layout */
+}
+
+/* Override utility classes for Marathi */
+[lang="mr"] .font-serif,
+[lang="mr"] .font-sans {
+  font-family: var(--font-marathi) !important;
+}
+
+/* Optimize heading line-heights and spacing for Marathi */
+[lang="mr"] h1, 
+[lang="mr"] h2, 
+[lang="mr"] h3, 
+[lang="mr"] h4, 
+[lang="mr"] h5, 
+[lang="mr"] h6,
+[lang="mr"] .text-3xl,
+[lang="mr"] .text-4xl,
+[lang="mr"] .text-5xl,
+[lang="mr"] .text-6xl,
+[lang="mr"] .text-7xl {
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+/* Better readability for Marathi paragraphs */
+[lang="mr"] p {
+  line-height: 1.7;
+}
+
+/* UI Container text wrapping fixes for Marathi */
+[lang="mr"] * {
+  overflow-wrap: break-word;
+}

@@ -2,7 +2,5 @@
   "name": "Sahyadri Bachav Sanghatana",
   "description": "Advocacy platform to stop illegal bauxite mining in the Shahuwadi eco-sensitive zone and protect the Sahyadri Tiger Corridor.",
   "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": []
 }
